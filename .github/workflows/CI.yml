@@ -2,9 +2,20 @@ name: CI
 on:
   push:
     branches:
-      - main
+      - master
+      - 'release/*'
     tags: ['*']
+    paths:
+      - '**.toml'
+      - '**.jl'
+      - 'docs/*'
+      - '.github/workflows/CI.yml'
   pull_request:
+    paths:
+      - '**.toml'
+      - '**.jl'
+      - 'docs/*'
+      - '.github/workflows/CI.yml'
   workflow_dispatch:
 concurrency:
   # Skip intermediate builds: always.
@@ -23,9 +34,8 @@ jobs:
       fail-fast: false
       matrix:
         version:
+          - '1.10'
           - '1.11'
-          - '1.6'
-          - 'pre'
         os:
           - ubuntu-latest
         arch:
@@ -37,5 +47,11 @@ jobs:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
       - uses: julia-actions/cache@v2
+      - name: Add Julia registries
+        run: |
+          using Pkg
+          pkg"registry add https://github.com/bsc-quantic/Registry.git"
+          pkg"registry add General"
+        shell: julia --color=yes {0}
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
