@@ -1,5 +1,6 @@
 [deps]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+HadaMAG = "7daef0c1-bc35-4833-8fb6-41d39c5c34f8"
 
 [sources]
 HadaMAG = {path = ".."}
