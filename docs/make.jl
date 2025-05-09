@@ -6,6 +6,9 @@ makedocs(
     sitename="HadaMAG.jl",
     pages = Any[
         "Home" => "index.md",
+        "Manual" => [
+            "State" => "State.md",
+        ]
     ],
     pagesonly = true,
     format = Documenter.HTML(),
