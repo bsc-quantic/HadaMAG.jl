@@ -7,7 +7,7 @@ makedocs(
     pages = Any[
         "Home" => "index.md",
         "Manual" => [
-            "State" => "State.md",
+            "State" => "manual/State.md",
         ]
     ],
     pagesonly = true,
