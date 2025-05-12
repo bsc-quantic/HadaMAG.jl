@@ -2,5 +2,5 @@ using HadaMAG
 using Test
 
 @testset "HadaMAG.jl" begin
-    # Write your tests here.
+    include("State_test.jl")
 end
