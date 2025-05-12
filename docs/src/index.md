@@ -3,8 +3,3 @@
 ```@meta
 CurrentModule = HadaMAG
 ```
-
-Example:
-```@docs
-func(x)
-```
