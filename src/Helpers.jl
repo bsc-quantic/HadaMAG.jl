@@ -1,5 +1,7 @@
 using Random
 using Distributions
+using DelimitedFiles
+using Statistics
 
 # Compute whether `len` is an exact power of `q`, returning exponent and a flag.
 function _power_q(len::Integer, q::Integer)
@@ -41,4 +43,64 @@ function haar_random_unitary(n_qubits::Integer, rng::AbstractRNG = Random.GLOBAL
     # correct diagonal of R to be positive real
     phases = diag(R) ./ abs.(diag(R))
     return Q * Diagonal(phases)
+end
+
+# Process tmp files from the Monte Carlo simulation, extracting means and stds.
+function process_files(seed; folder = ".", Nβ = 25)
+    # initialize vectors for x-values, means, and stds for second and third rows
+    x_vals = Float64[]
+    res_means = Float64[]
+    res_stds = Float64[]
+    m2ADD_means = Float64[]
+    m2ADD_stds = Float64[]
+
+    # loop over j = 0 to 12 (inclusive)
+    for j = 1:Nβ
+        # compute beta (x value)
+        beta = Float64(j) / Nβ
+        push!(x_vals, beta)
+
+        # construct the filename using string interpolation
+        filename = "_$(j)_$(seed+j).dat"
+        filename = joinpath(folder, filename)  # prepend folder to filename
+
+        # read the data from file; adjust the delimiter if needed
+        isfile(filename) || error("File $filename does not exist.")
+        data = readdlm(filename)
+
+        # assume data is a matrix and we need the second and third rows.
+        # (If your file has header rows or extra columns, modify the indexing accordingly.)
+        row2 = data[:, 2]
+        row3 = data[:, 3]
+
+        # compute mean and std for row2 (y values)
+        push!(res_means, mean(row2))
+        push!(res_stds, std(row2))
+
+        # compute mean and std for row3 (for the second measurement)
+        push!(m2ADD_means, mean(row3))
+        push!(m2ADD_stds, std(row3))
+    end
+
+    return x_vals, res_means, res_stds, m2ADD_means, m2ADD_stds
+end
+
+# Compute the integral using Simpson's rule.
+# This function assumes that the x-values are uniformly spaced.
+function integrate_simpson(x::AbstractVector, y::AbstractVector)
+    n = length(x) - 1
+    # Simpson's rule requires an even number of subintervals (odd number of points)
+    if n % 2 != 0
+        error(
+            "Simpson's rule requires an even number of subintervals (odd number of points).",
+        )
+    end
+
+    # Compute the spacing assuming uniform x values
+    h = (x[end] - x[1]) / n
+
+    # Simpson's rule formula:
+    # I = h/3 * [y₀ + yₙ + 4*(y₁ + y₃ + ... + yₙ₋₁) + 2*(y₂ + y₄ + ... + yₙ₋₂)]
+    integral = h/3 * (y[1] + y[end] + 4 * sum(y[2:2:(end-1)]) + 2 * sum(y[3:2:(end-2)]))
+    return integral
 end

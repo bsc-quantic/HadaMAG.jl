@@ -48,6 +48,7 @@ end
 qudits(s::StateVec{T,q}) where {T,q} = s.n
 qubits(s::StateVec{T,2}) where {T} = s.n
 qudit_dim(s::StateVec{T,q}) where {T,q} = s.q
+data(s::StateVec) = s.data
 
 Base.size(s::StateVec) = (length(s.data),)
 Base.getindex(s::StateVec, i::Int) = s.data[i]
