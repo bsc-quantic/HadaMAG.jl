@@ -4,7 +4,10 @@ using HadaMAG
 makedocs(
     modules = [HadaMAG],
     sitename = "HadaMAG.jl",
-    pages = Any["Home"=>"index.md", "Manual"=>["State"=>"manual/State.md", "Helpers"=>"manual/Helpers.md"]],
+    pages = Any[
+        "Home"=>"index.md",
+        "Manual"=>["State"=>"manual/State.md", "Helpers"=>"manual/Helpers.md"],
+    ],
     pagesonly = true,
     format = Documenter.HTML(),
     warnonly = true,
