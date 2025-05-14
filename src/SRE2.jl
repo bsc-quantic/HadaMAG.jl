@@ -1,4 +1,5 @@
 using Printf
+using FastHadamardStructuredTransforms_jll
 
 """
     MC_SRE2(ψ::StateVec{T,2}; backend = :auto, Nβ = 13, Nsamples = 1000, seed)
@@ -205,24 +206,6 @@ end
     return @inline PS2, MS2, MS3 = compute_moments(inVR)
 end
 
-const libffht_julia = "/home/jvalle1/git/SRE/src/libffht_julia.so"
-
-function call_fht_double!(inVR::Vector{Float64}, L::Int32)
-    # Ensure the input array is contiguous in memory
-    inVR_ptr = pointer(inVR)
-
-    # Perform the ccall
-    ccall(
-        (:fht_double_wrapper, libffht_julia),
-        Cvoid,                            # Return type
-        (Ptr{Cdouble}, Cint),             # Argument types
-        inVR_ptr,
-        L,
-    )
-
-    return inVR  # Assuming the function modifies the array in place
-end
-
 """
     compute_tmp!(tmp1::AbstractVector{T}, tmp2::AbstractVector{T}, X::AbstractVector{Complex{T}})
 
@@ -241,4 +224,38 @@ Compute the tmp1 and tmp2 vectors in-place using SIMD operations. tmp1 = real(X)
         tmp2[i] = im - r
     end
     return nothing
+end
+
+# const libffht_julia = "/home/jvalle1/git/SRE/src/libffht_julia.so"
+
+# function call_fht_double!(inVR::Vector{Float64}, L::Int32)
+#     # Ensure the input array is contiguous in memory
+#     inVR_ptr = pointer(inVR)
+
+#     # Perform the ccall
+#     ccall(
+#         (:fht_double_wrapper, libffht_julia),
+#         Cvoid,                            # Return type
+#         (Ptr{Cdouble}, Cint),             # Argument types
+#         inVR_ptr,
+#         L,
+#     )
+
+#     return inVR  # Assuming the function modifies the array in place
+# end
+
+function call_fht_double!(inVR::Vector{Float64}, L::Int32)
+    # Ensure the input array is contiguous in memory
+    inVR_ptr = pointer(inVR)
+
+    # Perform the ccall
+    ccall(
+        (:fht_double, FastHadamardStructuredTransforms_jll.libfasttransforms),
+        Cvoid,                            # Return type
+        (Ptr{Cdouble}, Cint),             # Argument types
+        inVR_ptr,
+        L,
+    )
+
+    return inVR  # Assuming the function modifies the array in place
 end
