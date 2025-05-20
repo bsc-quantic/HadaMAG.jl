@@ -1,7 +1,5 @@
 @testset "MPI" begin
     using MPI
-    using Test
-    using HadaMAG
 
     @testset "SRE2" begin
         L = 14

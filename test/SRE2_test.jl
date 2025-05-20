@@ -1,7 +1,3 @@
-using Test
-
-using HadaMAG
-
 @testset "SRE2" begin
     L = 14
     depth = 4

@@ -1,10 +1,7 @@
-using Test
 using Random
 using LinearAlgebra
 using JLD2
 using NPZ
-
-using HadaMAG
 
 @testset "StateVec" begin
     ψ = randn(ComplexF64, 2^3)
