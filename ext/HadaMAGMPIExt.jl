@@ -18,7 +18,7 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup 
     mpisize = MPI.Comm_size(comm)
 
     range_beta = 1:Nβ
-    beta_val(j) = Float64(j - 1) / (Nβ - 1)
+    beta_val(i) = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
 
     beta_values = []
     for j in 1:mpisize

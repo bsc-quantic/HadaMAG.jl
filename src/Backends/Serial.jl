@@ -5,7 +5,7 @@ using HadaMAG
 
 # This module provides the low-level kernels for the Serial backend.
 
-function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup = true)
+function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, sample; cleanup = true)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
@@ -13,9 +13,9 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup 
     m2 = 0.0
     try
         for i = 1:Nβ
-            β = Float64(i) / Nβ
+            β = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
 
-            HadaMAG._compute_SRE2_β(ψ, Nsamples, seed + i, β, i, tmpdir)
+            HadaMAG._compute_SRE2_β(ψ, Nsamples, seed + i, β, i, tmpdir, sample)
         end
 
         # Compute the average of the results for each β
