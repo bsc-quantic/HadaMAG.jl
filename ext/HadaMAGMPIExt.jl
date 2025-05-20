@@ -5,13 +5,12 @@ using MPI
 
 # This module provides the low-level kernels for the MPI backend.
 
-
-
-function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, sample; cleanup = true)
+function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup = true)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
 
+    # TODO: create a macro for this mpi rank assignment
     MPI.Initialized() || MPI.Init()
 
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
@@ -40,7 +39,7 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, sample; 
             # convert beta value to j
             idx = (β * (Nβ - 1) |> round |> Int) + 1
 
-            HadaMAG._compute_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir, sample)
+            HadaMAG._compute_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir)
         end
 
         MPI.Barrier(MPI.COMM_WORLD)
