@@ -35,7 +35,7 @@ _apply_backend(::Serial, fsym, args...; kw...) =
     getfield(HadaMAG.SerialBackend, fsym)(args...; kw...)
 
 _apply_backend(::Threaded, fsym, args...; kw...) =
-    getfield(HadaMAG.ThreadsBackend, fsym)(args...; kw...)
+    getfield(HadaMAG.ThreadedBackend, fsym)(args...; kw...)
 
 _apply_backend(::MPIThreads, fsym, args...; kw...) =
     if !isnothing(Base.get_extension(HadaMAG, :HadaMAGMPIExt))
@@ -45,8 +45,8 @@ _apply_backend(::MPIThreads, fsym, args...; kw...) =
     end
 
 # _apply_backend(::MPIThreads, fsym, args...; kw...) =
-#     if isdefined(HadaMAG, :MPIThreadsBackend)
-#         getfield(HadaMAG.MPIThreadsBackend, fsym)(args...; kw...)
+#     if isdefined(HadaMAG, :ThreadedBackend)
+#         getfield(HadaMAG.ThreadedBackend, fsym)(args...; kw...)
 #     else
 #         throw(ArgumentError("MPI backend unavailable – `using MPI` first"))
 #     end
