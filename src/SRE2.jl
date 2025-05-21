@@ -24,7 +24,7 @@ function MC_SRE2(
     _apply_backend(_choose_backend(backend), :MC_SRE2, ψ, Nβ, Nsamples, seed)
 end
 
-function _compute_SRE2_β(
+function _compute_MC_SRE2_β(
     ψ::StateVec{T,2},
     Nsamples::Int,
     seed::Union{Nothing,Int},

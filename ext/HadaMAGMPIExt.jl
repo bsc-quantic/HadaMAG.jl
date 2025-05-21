@@ -39,7 +39,7 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup 
             # convert beta value to j
             idx = (β * (Nβ - 1) |> round |> Int) + 1
 
-            HadaMAG._compute_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir)
+            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir, sample)
         end
 
         MPI.Barrier(MPI.COMM_WORLD)
