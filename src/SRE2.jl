@@ -259,3 +259,86 @@ function call_fht_double!(inVR::Vector{Float64}, L::Int32)
 
     return inVR  # Assuming the function modifies the array in place
 end
+
+# TODO: add a comment or fix the description here
+# inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
+# This is a SIMD-friendly version of the above operation.
+@inline @fastmath function blend_muladd!(
+    inVR::AbstractVector{T},
+    X1::AbstractVector{T},
+    T1::AbstractVector{T},
+    X2::AbstractVector{T},
+    T2::AbstractVector{T},
+) where {T<:AbstractFloat}
+    @inbounds @simd for i in eachindex(inVR, X1, T1, X2, T2)
+        # fuse one multiply+add into an FMA:
+        inVR[i] = muladd(X1[i], T1[i], X2[i] * T2[i])
+    end
+    return nothing
+end
+
+@fastmath function _compute_chunk_SRE(istart::Int64, iend::Int64, ψ::StateVec{Float64, 2}, Zwhere::Vector{Int64}, XTAB::Vector{UInt64}) :: Tuple{Float64, Float64, Float64}
+    L = qubits(ψ)
+    dim = 2^L
+
+    p2SAM = m2SAM = m3SAM = 0.0
+
+    TMP1 = zeros(Float64, dim)
+    TMP2 = zeros(Float64, dim)
+    Xloc1 = zeros(Float64, dim)
+    Xloc2 = zeros(Float64, dim)
+
+    for i in 1:dim
+        r, im = real(ψ[i]), imag(ψ[i])
+        Xloc1[i] = r
+        Xloc2[i] = im
+        TMP1[i] = r + im
+        TMP2[i] = im - r
+    end
+
+    # create arrays of real doubles that will store real and impaginary part of the state across the Gray's code
+    inVR = zeros(Float64, dim)
+
+    # for given Pauli string at position istart, specified in XTAB, act with appropriate X_j operators
+    for el in 1:L
+        bits = XTAB[istart]
+        bitval = (bits >> (el - 1)) & 0x1 # el runs from 1, 2, 3,... we need (el-1) in Julia, so that el=1 picks out the least-significant bit.
+        if bitval == 1
+            @inline apply_X!(el - 1, TMP1, TMP2) # Act with the X operators that are 1 in Gray's code
+        end
+    end
+
+    # the worker will update the state TMP when going through the greys code form istart to iend
+    for ix in istart:iend
+        # non-trivial mathematical thing happening: we need to compute such a vector related to the
+        # state (Xloc) and its propagated version along the Gray's code, TMP
+        blend_muladd!(inVR, Xloc1, TMP1, Xloc2, TMP2)  # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
+
+        # Do the fast Hadamard transform of the inVR
+        call_fht_double!(inVR, Int32(L))
+
+        # the vectors obtained with FHT contain overlaps of given Pauli strings:
+        # the Pauli strings are of the form XTAB[ix] (0...1 corresponding to Z operator)
+        # so to calculate SRE we have to add entries of the resulting vector with the specified powers
+        # (depending on the index of SRE we calculate)
+        #
+        # this step does sum over all Z pauli strings, given their X part determined by XTAB[ix]
+        # in time complexity L*2^L (while the naive implementation would be 4^L)
+        #
+        # in order to calculate SRE
+        for r in 1:dim
+            # p = copy(inVR[r])
+            pnorm = inVR[r] ^ 2 #+ inVI[r] * inVI[r]
+            m2SAM += pnorm ^ 2
+            # m3SAM += pnorm ^ 3 # TODO: should we uncomment this line?
+        end
+
+        # this takes us from Pauli string at given position of the Greys code to the next one
+        # (by a single action of X_j operator )
+        if ix < dim
+            @inline apply_X!(Zwhere[ix], TMP1, TMP2)
+        end
+    end
+
+    return p2SAM, m2SAM, m3SAM
+end
