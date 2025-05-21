@@ -15,7 +15,7 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup 
         for i = 1:Nβ
             β = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
 
-            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + i, β, i, tmpdir, sample)
+            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + i, β, i, tmpdir)
         end
 
         # Compute the average of the results for each β
