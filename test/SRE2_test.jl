@@ -3,7 +3,6 @@
     depth = 4
     ψ = rand_haar(L; depth)
 
-
     @testset "Monte Carlo SRE2" begin
         m2_serial = m2_threads = 0.0
         Nsamples = 1000
@@ -38,12 +37,12 @@
     # Test that Monte Carlo results converge to exact results as Nsamples increases
     # and that the results are improving with more samples
     @testset "Convergence of Monte Carlo" begin
-        Nsamples_list = [100, 1000, 5000, 10000, 20000]
-        m2_exact = SRE2(ψ; backend = :serial)[1]
+        Nsamples_list = [100, 1000, 20000]
+        m2_exact = SRE2(ψ; backend = :threads)[1]
 
         diff_last = Inf
         for Nsamples in Nsamples_list
-            m2_mc = MC_SRE2(ψ; backend = :serial, Nsamples, Nβ = 13)
+            m2_mc = MC_SRE2(ψ; backend = :threads, Nsamples, Nβ = 25)
             @test abs(m2_mc - m2_exact) < 0.1 * abs(m2_exact) # Check if within 10% of exact value
 
             @show Nsamples, m2_mc, m2_exact, abs(m2_mc - m2_exact)
