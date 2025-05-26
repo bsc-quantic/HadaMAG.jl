@@ -5,14 +5,13 @@ using MPI
 
 # This module provides the low-level kernels for the MPI backend.
 
-function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup = true)
+function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, sample; cleanup = true)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
 
     # TODO: create a macro for this mpi rank assignment
     MPI.Initialized() || MPI.Init()
-
     rank = MPI.Comm_rank(MPI.COMM_WORLD)
     comm = MPI.COMM_WORLD
     mpisize = MPI.Comm_size(comm)
@@ -39,7 +38,7 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup 
             # convert beta value to j
             idx = (β * (Nβ - 1) |> round |> Int) + 1
 
-            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir)
+            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir, sample)
         end
 
         MPI.Barrier(MPI.COMM_WORLD)
@@ -72,6 +71,126 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup 
     m2 = MPI.Bcast(m2, 0, comm)
 
     return m2
+end
+
+
+function SRE2(ψ)
+    dim = length(data(ψ))
+    L = qubits(ψ)
+    Ncores = Threads.nthreads() # Number of threads per mpi rank
+
+    # TODO: create a macro for this mpi rank assignment
+    MPI.Initialized() || MPI.Init()
+    rank = MPI.Comm_rank(MPI.COMM_WORLD)
+    comm = MPI.COMM_WORLD
+    nprocs = MPI.Comm_size(comm)
+
+    p2SAM = m2SAM = m3SAM = 0.0
+
+    Zwhere = zeros(Int64, dim - 1)
+    VALS = zeros(Int64, dim)
+    XTAB = zeros(UInt64, dim)
+
+    prev = 0
+    for i in 1:((1 << L) - 1)
+        # Compute Gray code: val = i ^ (i >> 1)
+        # In Julia, ⊻ is bitwise xor
+        val = i ⊻ (i >> 1)
+        diff = val ⊻ prev
+
+        VALS[i + 1] = val
+        prev = val
+
+        # Convert to UInt64, i.e. treat as a 64-bit mask.
+        r = UInt64(val)
+        pr = UInt64(diff)
+        XTAB[i + 1] = r
+
+        # Julia provides fast functions to count leading or trailing zeros in a bitset
+        # Use trailing_zeros to find the index of the least-significant set bit.
+        # (For example, for r = 8 the result is 3, because 8 == 0b1000.)
+        where_ = trailing_zeros(pr)
+        Zwhere[i] = where_
+    end
+
+
+    # Here we decide how many elements each process should get
+    base = div(dim - 1, nprocs)
+    rem  = mod(dim - 1, nprocs)
+
+    # Process i (0-indexed) gets base+1 if i < rem, else base:
+    counts = [i < rem ? base+1 : base for i in 0:nprocs-1]
+    # Compute displacements (starting index in the global array for each process)
+    displs = [sum(counts[1:i]) for i in 0:nprocs-1]
+
+    # Determine how many elements the current process gets
+    local_count = counts[rank+1]  # note: Julia uses 1-indexing
+
+
+    base_xtab = div(dim, nprocs)
+    rem_xtab  = mod(dim, nprocs)
+    counts_xtab = [i < rem_xtab ? base_xtab+1 : base_xtab for i in 0:nprocs-1]
+    displs_xtab = [sum(counts_xtab[1:i]) for i in 0:nprocs-1]
+
+    # Create a local array to hold the slice
+    if rank == 0
+        sender_zwhere = VBuffer(Zwhere, counts)
+        sender_xtab = VBuffer(XTAB, counts_xtab)
+    else
+        sender_zwhere = VBuffer(nothing)
+        sender_xtab = VBuffer(nothing)
+    end
+
+    MPI.Barrier(comm)
+
+    # Scatter the appropriate slice of Zwhere
+    local_Zwhere = MPI.Scatterv!(sender_zwhere, zeros(Int64, local_count), 0, comm)
+    local_XTAB = MPI.Scatterv!(sender_xtab, zeros(UInt64, counts_xtab[rank+1]), 0, comm)
+
+
+    # TODO: Wrap this in a function?
+    # divide the gray's code (which has 2^N positions) into Ncores, more or less equal patches
+    # we store the starting and finishing index corresponding to each of the patches in istart and iend
+    istart = [div((i-1)*(length(local_Zwhere)), Ncores) + 1 for i in 1:Ncores]
+    iend   = [div(i*(length(local_Zwhere)), Ncores) for i in 1:Ncores]
+
+    if rank == MPI.Comm_size(comm) - 1
+        iend[end] += 1
+    end
+
+    # we compute starting_id, which is the index of the first element of the local_Zwhere array, in the global Zwhere array
+    starting_id = displs[rank+1]
+
+    # The last thread processes until the end of Z (here we mimic Z.size()+1 from C++ by adding one extra element, if needed)
+    PS2 = zeros(Float64, Ncores)
+    MS2 = zeros(Float64, Ncores)
+    MS3 = zeros(Float64, Ncores)
+
+    Threads.@threads for j in 1:Ncores
+        # Each thread/processes the subrange [istart[j], iend[j]-1]
+        ps2, ms2, ms3 = HadaMAG._compute_chunk_SRE(starting_id, istart[j], iend[j], ψ, Zwhere, XTAB)
+        PS2[j] = ps2
+        MS2[j] = ms2
+        MS3[j] = ms3
+    end
+
+    # Now sum the partial sums to obtain the final results.
+    p2SAM = sum(PS2)
+    m2SAM = sum(MS2)
+    m3SAM = sum(MS3)
+
+    # Sum all the partial results of each rank on the master rank
+    if rank == 0
+        p2SAM = MPI.Reduce(p2SAM, MPI.SUM, 0, comm)
+        m2SAM = MPI.Reduce(m2SAM, MPI.SUM, 0, comm)
+        m3SAM = MPI.Reduce(m3SAM, MPI.SUM, 0, comm)
+    else
+        MPI.Reduce(p2SAM, MPI.SUM, 0, comm)
+        MPI.Reduce(m2SAM, MPI.SUM, 0, comm)
+        MPI.Reduce(m3SAM, MPI.SUM, 0, comm)
+    end
+
+    return (-log2(m2SAM/dim), 0.0) # TODO: should we really return 0.0 there?
 end
 
 end
