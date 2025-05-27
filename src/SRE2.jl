@@ -165,6 +165,26 @@ The moments are computed using SIMD operations for performance.
     return s2, s4, s6
 end
 
+"""
+    apply_X!(site, Xs...)
+
+Apply the “flip-bit at `site`” X-operator in-place
+to each vector in `Xs`.  All vectors must have the same length.
+"""
+@fastmath function apply_X!(site::Int, Xs::AbstractVector{T}...) where {T}
+    dim = length(Xs[1])
+    mask = 1 << site
+    @inbounds for i = 1:dim
+        j = ((i-1) ⊻ mask) + 1
+        if j > i
+            for X in Xs
+                X[i], X[j] = X[j], X[i]
+            end
+        end
+    end
+    return nothing
+end
+
 @fastmath @inline function apply_X_mask_2!(
     a::Vector{Float64},
     b::Vector{Float64},
