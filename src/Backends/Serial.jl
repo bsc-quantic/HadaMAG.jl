@@ -5,7 +5,13 @@ using HadaMAG
 
 # This module provides the low-level kernels for the Serial backend.
 
-function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup = true)
+function MC_SRE2(
+    ψ,
+    Nβ::Int,
+    Nsamples::Int,
+    seed::Union{Nothing,Int};
+    cleanup = true,
+)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
@@ -19,7 +25,7 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup 
         end
 
         # Compute the average of the results for each β
-        x, res_means, res_stds, m2ADD_means, m2ADD_stds =
+        x, res_means, res_stds, m2ADD_means, m2ADD_stds, naccepted =
             HadaMAG.process_files(seed; folder = tmpdir, Nβ)
 
         # Compute the final result using Simpson's rule
@@ -47,19 +53,19 @@ function SRE2(ψ)
     XTAB = zeros(UInt64, dim)
 
     prev = 0
-    for i in 1:((1 << L) - 1)
+    for i = 1:((1<<L)-1)
         # Compute Gray code: val = i ^ (i >> 1)
         # In Julia, ⊻ (typed \xor<tab>) is bitwise xor
         val = i ⊻ (i >> 1)
         diff = val ⊻ prev
 
-        VALS[i + 1] = val
+        VALS[i+1] = val
         prev = val
 
         # Convert to UInt64, i.e. treat as a 64-bit mask.
         r = UInt64(val)
         pr = UInt64(diff)
-        XTAB[i + 1] = r
+        XTAB[i+1] = r
 
         # Julia provides fast functions to count leading or trailing zeros in a bitset
         # Use trailing_zeros to find the index of the least-significant set bit.

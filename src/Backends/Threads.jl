@@ -4,7 +4,13 @@ using LinearAlgebra
 using Random
 using HadaMAG
 
-function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, cleanup = true)
+function MC_SRE2(
+    ψ,
+    Nβ::Int,
+    Nsamples::Int,
+    seed::Union{Nothing,Int};
+    cleanup = true,
+)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()

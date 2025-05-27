@@ -5,7 +5,13 @@ using MPI
 
 # This module provides the low-level kernels for the MPI backend.
 
-function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, sample; cleanup = true)
+function MC_SRE2(
+    ψ,
+    Nβ::Int,
+    Nsamples::Int,
+    seed::Union{Nothing,Int};
+    cleanup = true,
+)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
@@ -20,7 +26,7 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, sample; 
     beta_val(i) = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
 
     beta_values = []
-    for j in 1:mpisize
+    for j = 1:mpisize
         start = Int(ceil((j - 1) * Nβ / mpisize)) + 1
         stop = Int(ceil(j * Nβ / mpisize))
         push!(beta_values, beta_val.(range_beta[start:stop]))
@@ -31,9 +37,9 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, sample; 
     m2 = 0.0
     try
         # Each rank processes its own beta values
-        for i in 1:length(beta_rank)
+        for i = 1:length(beta_rank)
             β = beta_rank[i]
-        # for i = 1:Nβ
+            # for i = 1:Nβ
             # β = Float64(i) / Nβ
             # convert beta value to j
             idx = (β * (Nβ - 1) |> round |> Int) + 1
@@ -45,7 +51,7 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, sample; 
 
         # Rank 0 computes the average of the results for each β
         if rank == 0
-            x, res_means, res_stds, m2ADD_means, m2ADD_stds =
+            x, res_means, res_stds, m2ADD_means, m2ADD_stds, naccepted =
                 HadaMAG.process_files(seed; folder = tmpdir, Nβ)
 
             # Compute the final result using Simpson's rule
@@ -92,19 +98,19 @@ function SRE2(ψ)
     XTAB = zeros(UInt64, dim)
 
     prev = 0
-    for i in 1:((1 << L) - 1)
+    for i = 1:((1<<L)-1)
         # Compute Gray code: val = i ^ (i >> 1)
         # In Julia, ⊻ is bitwise xor
         val = i ⊻ (i >> 1)
         diff = val ⊻ prev
 
-        VALS[i + 1] = val
+        VALS[i+1] = val
         prev = val
 
         # Convert to UInt64, i.e. treat as a 64-bit mask.
         r = UInt64(val)
         pr = UInt64(diff)
-        XTAB[i + 1] = r
+        XTAB[i+1] = r
 
         # Julia provides fast functions to count leading or trailing zeros in a bitset
         # Use trailing_zeros to find the index of the least-significant set bit.
@@ -116,21 +122,21 @@ function SRE2(ψ)
 
     # Here we decide how many elements each process should get
     base = div(dim - 1, nprocs)
-    rem  = mod(dim - 1, nprocs)
+    rem = mod(dim - 1, nprocs)
 
     # Process i (0-indexed) gets base+1 if i < rem, else base:
-    counts = [i < rem ? base+1 : base for i in 0:nprocs-1]
+    counts = [i < rem ? base+1 : base for i = 0:(nprocs-1)]
     # Compute displacements (starting index in the global array for each process)
-    displs = [sum(counts[1:i]) for i in 0:nprocs-1]
+    displs = [sum(counts[1:i]) for i = 0:(nprocs-1)]
 
     # Determine how many elements the current process gets
     local_count = counts[rank+1]  # note: Julia uses 1-indexing
 
 
     base_xtab = div(dim, nprocs)
-    rem_xtab  = mod(dim, nprocs)
-    counts_xtab = [i < rem_xtab ? base_xtab+1 : base_xtab for i in 0:nprocs-1]
-    displs_xtab = [sum(counts_xtab[1:i]) for i in 0:nprocs-1]
+    rem_xtab = mod(dim, nprocs)
+    counts_xtab = [i < rem_xtab ? base_xtab+1 : base_xtab for i = 0:(nprocs-1)]
+    displs_xtab = [sum(counts_xtab[1:i]) for i = 0:(nprocs-1)]
 
     # Create a local array to hold the slice
     if rank == 0
@@ -151,8 +157,8 @@ function SRE2(ψ)
     # TODO: Wrap this in a function?
     # divide the gray's code (which has 2^N positions) into Ncores, more or less equal patches
     # we store the starting and finishing index corresponding to each of the patches in istart and iend
-    istart = [div((i-1)*(length(local_Zwhere)), Ncores) + 1 for i in 1:Ncores]
-    iend   = [div(i*(length(local_Zwhere)), Ncores) for i in 1:Ncores]
+    istart = [div((i-1)*(length(local_Zwhere)), Ncores) + 1 for i = 1:Ncores]
+    iend = [div(i*(length(local_Zwhere)), Ncores) for i = 1:Ncores]
 
     if rank == MPI.Comm_size(comm) - 1
         iend[end] += 1
@@ -166,9 +172,10 @@ function SRE2(ψ)
     MS2 = zeros(Float64, Ncores)
     MS3 = zeros(Float64, Ncores)
 
-    Threads.@threads for j in 1:Ncores
+    Threads.@threads for j = 1:Ncores
         # Each thread/processes the subrange [istart[j], iend[j]-1]
-        ps2, ms2, ms3 = HadaMAG._compute_chunk_SRE(starting_id, istart[j], iend[j], ψ, Zwhere, XTAB)
+        ps2, ms2, ms3 =
+            HadaMAG._compute_chunk_SRE(starting_id, istart[j], iend[j], ψ, Zwhere, XTAB)
         PS2[j] = ps2
         MS2[j] = ms2
         MS3[j] = ms3
