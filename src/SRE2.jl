@@ -277,7 +277,22 @@ end
     return nothing
 end
 
-@fastmath function _compute_chunk_SRE(istart::Int64, iend::Int64, ψ::StateVec{Float64, 2}, Zwhere::Vector{Int64}, XTAB::Vector{UInt64}) :: Tuple{Float64, Float64, Float64}
+_compute_chunk_SRE(
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+) = _compute_chunk_SRE(0, istart, iend, ψ, Zwhere, XTAB)
+
+@fastmath function _compute_chunk_SRE(
+    index::Int64,
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+)::Tuple{Float64,Float64,Float64}
     L = qubits(ψ)
     dim = 2^L
 
@@ -288,7 +303,7 @@ end
     Xloc1 = zeros(Float64, dim)
     Xloc2 = zeros(Float64, dim)
 
-    for i in 1:dim
+    for i = 1:dim
         r, im = real(ψ[i]), imag(ψ[i])
         Xloc1[i] = r
         Xloc2[i] = im
@@ -300,7 +315,7 @@ end
     inVR = zeros(Float64, dim)
 
     # for given Pauli string at position istart, specified in XTAB, act with appropriate X_j operators
-    for el in 1:L
+    for el = 1:L
         bits = XTAB[istart]
         bitval = (bits >> (el - 1)) & 0x1 # el runs from 1, 2, 3,... we need (el-1) in Julia, so that el=1 picks out the least-significant bit.
         if bitval == 1
@@ -309,7 +324,7 @@ end
     end
 
     # the worker will update the state TMP when going through the greys code form istart to iend
-    for ix in istart:iend
+    for ix = istart:iend
         # non-trivial mathematical thing happening: we need to compute such a vector related to the
         # state (Xloc) and its propagated version along the Gray's code, TMP
         blend_muladd!(inVR, Xloc1, TMP1, Xloc2, TMP2)  # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
@@ -326,7 +341,7 @@ end
         # in time complexity L*2^L (while the naive implementation would be 4^L)
         #
         # in order to calculate SRE
-        for r in 1:dim
+        for r = 1:dim
             # p = copy(inVR[r])
             pnorm = inVR[r] ^ 2 #+ inVI[r] * inVI[r]
             m2SAM += pnorm ^ 2
@@ -335,7 +350,7 @@ end
 
         # this takes us from Pauli string at given position of the Greys code to the next one
         # (by a single action of X_j operator )
-        if ix < dim
+        if ix + index < dim
             @inline apply_X!(Zwhere[ix], TMP1, TMP2)
         end
     end
