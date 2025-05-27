@@ -24,6 +24,21 @@ function MC_SRE2(
     _apply_backend(_choose_backend(backend), :MC_SRE2, ψ, Nβ, Nsamples, seed)
 end
 
+# TODO: Check this description -> how is this new algorithm named?
+
+"""
+    SRE2(ψ::StateVec{T,2}; backend = :auto)
+
+Compute the exact Stabilizer Renyi entropy (q=2) of a quantum state ψ using the HadaMAG algorithm.
+
+# Arguments
+- `ψ`: A [`StateVec`](@ref) object representing the quantum state.
+- `backend`: The backend to use for the computation. Default is `:auto`, which selects the best available backend.
+"""
+function SRE2(ψ::StateVec{T,2}; backend = :auto) where {T}
+    _apply_backend(_choose_backend(backend), :SRE2, ψ)
+end
+
 function _compute_MC_SRE2_β(
     ψ::StateVec{T,2},
     Nsamples::Int,
