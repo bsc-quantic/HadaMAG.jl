@@ -1,11 +1,10 @@
-module ThreadedBackend
+module ThreadedBackend # This module provides the low-level kernels for the Threaded backend
+
 using LinearAlgebra
 using Random
 using HadaMAG
 
-# This module provides the low-level kernels for the Threaded backend.
-
-function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup = true)
+function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, cleanup = true)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
@@ -19,7 +18,7 @@ function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup 
         end
 
         # Compute the average of the results for each β
-        x, res_means, res_stds, m2ADD_means, m2ADD_stds =
+        x, res_means, res_stds, m2ADD_means, m2ADD_stds, naccepted =
             HadaMAG.process_files(seed; folder = tmpdir, Nβ)
 
         # Compute the final result using Simpson's rule
@@ -50,19 +49,19 @@ function SRE2(ψ)
     XTAB = zeros(UInt64, dim)
 
     prev = 0
-    for i in 1:((1 << L) - 1)
+    for i = 1:((1<<L)-1)
         # Compute Gray code: val = i ^ (i >> 1)
         # In Julia, ⊻ (typed \xor<tab>) is bitwise xor
         val = i ⊻ (i >> 1)
         diff = val ⊻ prev
 
-        VALS[i + 1] = val
+        VALS[i+1] = val
         prev = val
 
         # Convert to UInt64, i.e. treat as a 64-bit mask.
         r = UInt64(val)
         pr = UInt64(diff)
-        XTAB[i + 1] = r
+        XTAB[i+1] = r
 
         # Julia provides fast functions to count leading or trailing zeros in a bitset
         # Use trailing_zeros to find the index of the least-significant set bit.
@@ -74,15 +73,15 @@ function SRE2(ψ)
     # TODO: Wrap this in a function?
     # divide the gray's code (which has 2^N positions) into Ncores, more or less equal patches
     # we store the starting and finishing index corresponding to each of the patches in istart and iend
-    istart = [div((i-1)*(length(Zwhere)+1), Ncores) + 1 for i in 1:Ncores]
-    iend   = [div(i*(length(Zwhere)+1), Ncores) for i in 1:Ncores]
+    istart = [div((i-1)*(length(Zwhere)+1), Ncores) + 1 for i = 1:Ncores]
+    iend = [div(i*(length(Zwhere)+1), Ncores) for i = 1:Ncores]
 
     # The last thread processes until the end of Z (here we mimic Z.size()+1 from C++ by adding one extra element, if needed)
     PS2 = zeros(Float64, Ncores)
     MS2 = zeros(Float64, Ncores)
     MS3 = zeros(Float64, Ncores)
 
-    Threads.@threads for j in 1:Ncores
+    Threads.@threads for j = 1:Ncores
         # Each thread/processes the subrange [istart[j], iend[j]-1]
         ps2, ms2, ms3 = HadaMAG._compute_chunk_SRE(istart[j], iend[j], ψ, Zwhere, XTAB)
         PS2[j] = ps2
