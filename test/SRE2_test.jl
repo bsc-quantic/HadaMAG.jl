@@ -9,14 +9,12 @@
         Nβ = 13
 
         @testset "SerialBackend" begin
-
             # test that we get the same results with same seed
             m2_serial = MC_SRE2(ψ; backend = :serial, seed = 123, Nsamples, Nβ)
             @test MC_SRE2(ψ; backend = :serial, seed = 123, Nsamples, Nβ) ≈ m2_serial
         end
 
         @testset "ThreadedBackend" begin
-
             # test that we get the same results with same seed
             m2_threads = MC_SRE2(ψ; backend = :threads, seed = 123, Nsamples, Nβ)
             @test MC_SRE2(ψ; backend = :threads, seed = 123, Nsamples, Nβ) ≈ m2_threads
@@ -38,7 +36,7 @@
     # and that the results are improving with more samples
     @testset "Convergence of Monte Carlo" begin
         Nsamples_list = [50, 2000, 50000]
-        m2_exact, _ = SRE2(ψ; backend = :threads)[1]
+        m2_exact, _ = SRE2(ψ; backend = :threads)
 
         diff_last = Inf
         for Nsamples in Nsamples_list
