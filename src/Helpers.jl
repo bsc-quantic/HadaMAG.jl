@@ -53,15 +53,16 @@ function process_files(seed; folder = ".", Nβ = 25)
     res_stds = Float64[]
     m2ADD_means = Float64[]
     m2ADD_stds = Float64[]
+    naccepted = Int64[]
 
     # loop over j = 0 to 12 (inclusive)
-    for j = 1:Nβ
-        # compute beta (x value)
-        beta = Float64(j) / Nβ
-        push!(x_vals, beta)
+    for i = 1:Nβ
+        # compute β (x value)
+        β = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
+        push!(x_vals, β)
 
         # construct the filename using string interpolation
-        filename = "_$(j)_$(seed+j).dat"
+        filename = "_$(i)_$(seed+i).dat"
         filename = joinpath(folder, filename)  # prepend folder to filename
 
         # read the data from file; adjust the delimiter if needed
@@ -80,9 +81,12 @@ function process_files(seed; folder = ".", Nβ = 25)
         # compute mean and std for row3 (for the second measurement)
         push!(m2ADD_means, mean(row3))
         push!(m2ADD_stds, std(row3))
+
+        # store the number of accepted samples
+        push!(naccepted, length(row2))
     end
 
-    return x_vals, res_means, res_stds, m2ADD_means, m2ADD_stds
+    return x_vals, res_means, res_stds, m2ADD_means, m2ADD_stds, naccepted
 end
 
 # Compute the integral using Simpson's rule.
