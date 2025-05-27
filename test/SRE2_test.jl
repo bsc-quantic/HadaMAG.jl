@@ -38,7 +38,7 @@
     # and that the results are improving with more samples
     @testset "Convergence of Monte Carlo" begin
         Nsamples_list = [50, 2000, 50000]
-        m2_exact = SRE2(ψ; backend = :threads)[1]
+        m2_exact, _ = SRE2(ψ; backend = :threads)[1]
 
         diff_last = Inf
         for Nsamples in Nsamples_list
