@@ -25,7 +25,6 @@
         @test_throws AssertionError generate_gray_table(3, 1)
     end
 
-
     @testset "General q-code" begin
         for (n, q) in ((2, 3), (1, 4))
             XT, Z = generate_gray_table(n, q)
