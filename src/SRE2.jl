@@ -386,7 +386,7 @@ _compute_chunk_SRE(
         # this takes us from Pauli string at given position of the Greys code to the next one
         # (by a single action of X_j operator )
         if ix + index < dim
-            @inline apply_X!(Zwhere[ix], TMP1, TMP2)
+            @inline apply_X!(Zwhere[ix] - 1, TMP1, TMP2)
         end
     end
 

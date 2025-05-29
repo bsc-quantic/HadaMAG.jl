@@ -21,7 +21,7 @@ function generate_binary(n::Integer)
     # compute which bit flipped between successive codes:
     #  xor each adjacent pair, then trailing_zeros (0-based) + 1
     diffs = xor.(codes[1:(end-1)], codes[2:end])
-    flips = trailing_zeros.(diffs) # zero based index!
+    flips = trailing_zeros.(diffs) .+ 1 # one-based index!
 
     return codes, flips
 end
