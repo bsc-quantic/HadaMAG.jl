@@ -50,31 +50,7 @@ function SRE2(ψ)
 
     p2SAM = m2SAM = m3SAM = 0.0
 
-    Zwhere = zeros(Int64, dim - 1)
-    VALS = zeros(Int64, dim)
-    XTAB = zeros(UInt64, dim)
-
-    prev = 0
-    for i = 1:((1<<L)-1)
-        # Compute Gray code: val = i ^ (i >> 1)
-        # In Julia, ⊻ (typed \xor<tab>) is bitwise xor
-        val = i ⊻ (i >> 1)
-        diff = val ⊻ prev
-
-        VALS[i+1] = val
-        prev = val
-
-        # Convert to UInt64, i.e. treat as a 64-bit mask.
-        r = UInt64(val)
-        pr = UInt64(diff)
-        XTAB[i+1] = r
-
-        # Julia provides fast functions to count leading or trailing zeros in a bitset
-        # Use trailing_zeros to find the index of the least-significant set bit.
-        # (For example, for r = 8 the result is 3, because 8 == 0b1000.)
-        where_ = trailing_zeros(pr)
-        Zwhere[i] = where_
-    end
+    XTAB, Zwhere = generate_gray_table(L, 2)
 
     # TODO: Wrap this in a function?
     # divide the gray's code (which has 2^N positions) into Ncores, more or less equal patches
