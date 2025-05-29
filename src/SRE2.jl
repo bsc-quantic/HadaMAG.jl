@@ -188,7 +188,7 @@ to each vector in `Xs`.  All vectors must have the same length.
 """
 @fastmath function apply_X!(site::Int, Xs::AbstractVector{T}...) where {T}
     dim = length(Xs[1])
-    mask = 1 << site
+    mask = 1 << site # No need to subtract 1, since `site` is 0-based
     @inbounds for i = 1:dim
         j = ((i-1) ⊻ mask) + 1
         if j > i
