@@ -73,6 +73,9 @@ function _compute_MC_SRE2_β(
     tries = floor.(Int, randvals .* 9) .+ 1 # each element ∈ 1:9
     rs = rand(rng, dist, Nsamples) # vector of random in [0,1)
 
+    # Create a table of masks for each qubit position
+    MASK_TABLE = UInt64.(1) .<< (0:(L-1))
+
     # Open file and init stats
     filename = "_$(j)_$(seed).dat"
     io = open(joinpath(tmpdir, filename), "w")
@@ -92,13 +95,18 @@ function _compute_MC_SRE2_β(
         r = rs[idx] # pre‐drawn uniform
         tr = tries[idx] # 1…9
 
-        # generate a random number of qubits to flip
+        # generate tr random numbers of qubits to flip
         whereA_vec = rand(rng, 1:L, tr)
 
-        # obtain the mask for the qubits to flip
-        mask_acc = foldl(⊻, MASK_TABLE[whereA_vec]; init = zero(UInt))
+        # CHECK: foldl is better?
+        # build the XOR-mask by folding the table entries
+        # mask_acc   = foldl(⊻, BIT_MASK[whereA_vec]; init = zero(UInt64))
+        mask_acc = zero(UInt64)
+        @inbounds for w in whereA_vec
+            mask_acc ⊻= MASK_TABLE[w]
+        end
 
-        # apply mask
+        # apply mask to current state
         currX ⊻= mask_acc
         @inline tmp1, tmp2 = apply_X_mask_2!(tmp1, tmp2, mask_acc)
 
@@ -112,6 +120,8 @@ function _compute_MC_SRE2_β(
         else
             # undo mask
             currX ⊻= mask_acc
+
+            # CHECK: parallelize applyX is it useful for L large?
             @inline tmp1, tmp2 = apply_X_mask_2!(tmp1, tmp2, mask_acc)
         end
 
@@ -121,17 +131,17 @@ function _compute_MC_SRE2_β(
         n_p += 1
 
         # occasionally dump to disk
-        ile = z > 1 ? 2^(Int(trunc(log2(z)/1.5))) : 10
+        ile = z > 1 ? 2^(Int(floor(log2(z)/1.5))) : 10
         if (z % ile == 0) && (n_p > 20)
             res = sum_p / n_p
             var = sum_p2 / n_p
-            @printf(buf, "%d %.20f %.20f %.20f\n", z, res, m2ADD/dim, var)
+            @printf(io, "%d %.20f %.20f %.20f\n", z, res, m2ADD/dim, var)
         end
 
         # flush every FLUSH_INTERVAL log‐lines:
-        if buf.size ≥ FLUSH_INTERVAL * 60  # rough bytes estimate
-            write(io, take!(buf)) # write + clear
-        end
+        # if buf.size ≥ FLUSH_INTERVAL * 60  # rough bytes estimate
+        #     write(io, take!(buf)) # write + clear
+        # end
     end
 
     write(io, take!(buf)) # final flush
