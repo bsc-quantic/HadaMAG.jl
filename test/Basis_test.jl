@@ -16,7 +16,7 @@
                 a, b = codes[k], codes[k+1]
                 diff = a ⊻ b
                 @test count_ones(diff) == 1
-                @test flips[k] == trailing_zeros(diff) # no +1, since flips are 0-based
+                @test flips[k] == trailing_zeros(diff) + 1 # flips are 1-based !
                 @test b == (UInt64(k) ⊻ (UInt64(k) >> 1))
             end
         end
