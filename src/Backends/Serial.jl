@@ -55,21 +55,4 @@ function SRE2(ψ)
     return (-log2(m2SAM/dim), 0.0) # TODO: should we really return 0.0 there?
 end
 
-        # Convert to UInt64, i.e. treat as a 64-bit mask.
-        r = UInt64(val)
-        pr = UInt64(diff)
-        XTAB[i+1] = r
-
-        # Julia provides fast functions to count leading or trailing zeros in a bitset
-        # Use trailing_zeros to find the index of the least-significant set bit.
-        # (For example, for r = 8 the result is 3, because 8 == 0b1000.)
-        where_ = trailing_zeros(pr)
-        Zwhere[i] = where_
-    end
-
-    p2SAM, m2SAM, m3SAM = HadaMAG._compute_chunk_SRE(1, dim, ψ, Zwhere, XTAB)
-
-    return (-log2(m2SAM/dim), 0.0) # TODO: should we really return 0.0 there?
-end
-
 end # module SerialBackend
