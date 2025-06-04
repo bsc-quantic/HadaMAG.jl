@@ -48,19 +48,12 @@ function SRE2(ψ)
     dim = length(data(ψ))
     L = qubits(ψ)
 
-    Zwhere = zeros(Int64, dim - 1)
-    VALS = zeros(Int64, dim)
-    XTAB = zeros(UInt64, dim)
+    XTAB, Zwhere = generate_gray_table(L, 2)
 
-    prev = 0
-    for i = 1:((1<<L)-1)
-        # Compute Gray code: val = i ^ (i >> 1)
-        # In Julia, ⊻ (typed \xor<tab>) is bitwise xor
-        val = i ⊻ (i >> 1)
-        diff = val ⊻ prev
+    p2SAM, m2SAM, m3SAM = HadaMAG._compute_chunk_SRE(1, dim, ψ, Zwhere, XTAB)
 
-        VALS[i+1] = val
-        prev = val
+    return (-log2(m2SAM/dim), 0.0) # TODO: should we really return 0.0 there?
+end
 
         # Convert to UInt64, i.e. treat as a 64-bit mask.
         r = UInt64(val)
