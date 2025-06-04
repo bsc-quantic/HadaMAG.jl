@@ -55,4 +55,17 @@ function SRE2(ψ)
     return (-log2(m2SAM/dim), 0.0) # TODO: should we really return 0.0 there?
 end
 
+function mana_SRE2(ψ)
+    dim = length(data(ψ))
+    L = qudits(ψ)
+
+    XTAB, Zwhere = generate_gray_table(L, 3)
+
+    p2SAM, m2SAM, m3SAM = HadaMAG._compute_chunk_mana_SRE(1, dim, ψ, Zwhere, XTAB)
+
+    println("mana = ", log2(p2SAM)/log2(3.0))
+
+    return (-log2(m2SAM/dim)/log2(3.0), -1.0*log2(real(m3SAM)/dim)/log2(3.0))
+end
+
 end # module SerialBackend
