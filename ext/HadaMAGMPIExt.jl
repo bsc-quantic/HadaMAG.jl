@@ -44,7 +44,7 @@ function MC_SRE2(
             # convert beta value to j
             idx = (β * (Nβ - 1) |> round |> Int) + 1
 
-            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir, sample)
+            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir)
         end
 
         MPI.Barrier(MPI.COMM_WORLD)
@@ -128,7 +128,6 @@ function SRE2(ψ)
     # Scatter the appropriate slice of Zwhere
     local_Zwhere = MPI.Scatterv!(sender_zwhere, zeros(Int64, local_count), 0, comm)
     local_XTAB = MPI.Scatterv!(sender_xtab, zeros(UInt64, counts_xtab[rank+1]), 0, comm)
-
 
     # TODO: Wrap this in a function?
     # divide the gray's code (which has 2^N positions) into Ncores, more or less equal patches
