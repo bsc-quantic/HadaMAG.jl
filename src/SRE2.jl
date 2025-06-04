@@ -39,6 +39,15 @@ function SRE2(ψ::StateVec{T,2}; backend = :auto) where {T}
     _apply_backend(_choose_backend(backend), :SRE2, ψ)
 end
 
+"""
+    mana_SRE2(ψ::StateVec{T,3}; backend = :auto)
+
+Compute the Mana of a quantum state qu-trit state ψ using the HadaMAG algorithm.
+"""
+function mana_SRE2(ψ::StateVec{T,3}; backend = :auto) where {T}
+    _apply_backend(_choose_backend(backend), :mana_SRE2, ψ)
+end
+
 function _compute_MC_SRE2_β(
     ψ::StateVec{T,2},
     Nsamples::Int,
@@ -419,7 +428,7 @@ Throws an error if `length(ψ)` isn’t a power of 3 or `site` ∉ 1:n.
     N = length(ψ)
     n = Int(round(log(N)/log(3)))
     N != 3^n && error("length(ψ) = $N is not 3^n")
-    site ∉ 1:n && error("site=$(site) out of 0:$(n-1)")
+    # site ∉ 1:n && error("site=$(site) out of 0:$(n-1)")
 
     stride = 3^(site-1) # We subtract one since site is 1-based
     block = 3*stride
@@ -440,62 +449,31 @@ Throws an error if `length(ψ)` isn’t a power of 3 or `site` ∉ 1:n.
     return ψ
 end
 
-
-"""
-    fast_hadamard_qutrit!(ψ::AbstractVector{Complex{T}}) where T<:Real
-
-In‐place generalized Hadamard (H₃) on each of the log₃(length(ψ)) qutrits
-encoded in the state‐vector `ψ`.  After calling, ψ → (H₃ ⊗ H₃ ⊗ …)·ψ.
-
-Throws if `length(ψ)` isn’t exactly 3ⁿ for some integer n.
-"""
-
-# check power of 3
-const ωr = -0.5            # = cos(2π/3)
-const ωi = √3/2           # = sin(2π/3)
-
-@fastmath function fast_hadamard_qutrit!(
-    ψ::AbstractVector{Complex{T}},
-) where {T<:AbstractFloat}
+@fastmath function actX_qutrit!(ψ::Vector{Complex{T}}, site::Integer, k::Integer) where {T}
     N = length(ψ)
     n = Int(round(log(N)/log(3)))
-    N == 3^n || throw(ArgumentError("length(ψ) = $N is not a power of 3"))
+    N != 3^n && error("length(ψ) = $N is not 3^n")
+    # site ∉ 1:n     && error("site=$site out of 1:$n")
 
-    step = 1
-    while step < N
-        jump = 3*step
-        @inbounds for i = 1:jump:N
-            @simd for j = 0:(step-1)
-                idx = i+j
-                a = ψ[idx];
-                ar, ai = real(a), imag(a)
-                b = ψ[idx+step];
-                br, bi = real(b), imag(b)
-                c = ψ[idx+2*step];
-                cr, ci = real(c), imag(c)
+    stride = 3^(site-1)
+    block = 3*stride
 
-                # compute a + b + c
-                r0 = ar + br + cr
-                i0 = ai + bi + ci
+    @inbounds for bs = 1:block:N
+        @simd for off = 0:(stride-1)
+            i0 = bs + off
+            i1 = i0 + stride
+            i2 = i1 + stride
 
-                # compute a + ω b + ω² c
-                #    real: ar + ωr*br − ωi*bi + ωr*cr + ωi*ci
-                # imaginary: ai + ωr*bi + ωi*br + ωr*ci − ωi*cr
-                r1 = ar + ωr*(br + cr) - ωi*(bi - ci)
-                i1 = ai + ωr*(bi + ci) + ωi*(br - cr)
-
-                # compute a + ω² b + ω c
-                #    ω² = ωr - i ωi
-                r2 = ar + ωr*(br + cr) + ωi*(bi - ci)
-                i2 = ai + ωr*(bi + ci) - ωi*(br - cr)
-
-                ψ[idx] = Complex(r0, i0)
-                ψ[idx+step] = Complex(r1, i1)
-                ψ[idx+2*step] = Complex(r2, i2)
+            if k == 1
+                # forward cycle: 0→1→2→0
+                ψ[i0], ψ[i1], ψ[i2] = ψ[i1], ψ[i2], ψ[i0]
+            elseif k == 2
+                # backward cycle: 0→2→1→0 (≡ X²)
+                ψ[i0], ψ[i1], ψ[i2] = ψ[i2], ψ[i0], ψ[i1]
             end
         end
-        step = jump
     end
+
     return ψ
 end
 
@@ -523,17 +501,11 @@ _compute_chunk_mana_SRE(
     TMP = copy(data(ψ))
     Xloc = copy(data(ψ))
     inV = zeros(ComplexF64, dim)
+    @assert size(XTAB, 2) == 3^L
 
-    for site = 1:length(XTAB[istart])
-        k = XTAB[istart][site] % 3
-        if k == 1
-            @inline actX_qutrit!(TMP, site)
-        elseif k == 2
-            # two +1’s is the same as one “–1 mod 3”,
-            # but easiest is just call twice
-            @inline actX_qutrit!(TMP, site)
-            @inline actX_qutrit!(TMP, site)
-        end
+    for site = 1:L
+        k = XTAB[site, istart]
+        k > 0 && actX_qutrit!(TMP, site, k)
     end
 
     # the worker will update the state TMP when going through the greys code form istart to iend
