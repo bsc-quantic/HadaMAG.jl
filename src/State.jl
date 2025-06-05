@@ -99,6 +99,7 @@ function rand_haar(n::Int; depth, rng::AbstractRNG = Random.GLOBAL_RNG)
 
     return StateVec(vec; q = 2)
 end
+
 """
     apply_brick_wall_haar!(state::AbstractVector{ComplexF64}, nqubits::Integer, depth::Integer; rng::AbstractRNG = Random.GLOBAL_RNG)
 
