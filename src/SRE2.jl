@@ -438,7 +438,7 @@ Throws an error if `length(ψ)` isn’t a power of 3 or `site` ∉ 1:n.
             a = block_start + offset
             b = a + stride
             c = b + stride
-            # ← this one matches your C++ XX lookup exactly:
+
             tmp = ψ[a]
             ψ[a] = ψ[b]
             ψ[b] = ψ[c]
