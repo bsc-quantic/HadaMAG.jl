@@ -150,7 +150,7 @@ function SRE2(ψ)
     Threads.@threads for j = 1:Ncores
         # Each thread/processes the subrange [istart[j], iend[j]-1]
         ps2, ms2, ms3 =
-            HadaMAG._compute_chunk_SRE(starting_id, istart[j], iend[j], ψ, Zwhere, XTAB)
+            HadaMAG._compute_chunk_SRE2(starting_id, istart[j], iend[j], ψ, Zwhere, XTAB)
         PS2[j] = ps2
         MS2[j] = ms2
         MS3[j] = ms3

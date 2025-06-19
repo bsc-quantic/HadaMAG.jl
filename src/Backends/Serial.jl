@@ -50,7 +50,7 @@ function SRE2(ψ)
 
     XTAB, Zwhere = generate_gray_table(L, 2)
 
-    p2SAM, m2SAM, m3SAM = HadaMAG._compute_chunk_SRE(1, dim, ψ, Zwhere, XTAB)
+    p2SAM, m2SAM, m3SAM = HadaMAG._compute_chunk_SRE2(1, dim, ψ, Zwhere, XTAB)
 
     return (-log2(m2SAM/dim), 0.0) # TODO: should we really return 0.0 there?
 end
