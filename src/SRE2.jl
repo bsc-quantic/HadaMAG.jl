@@ -96,16 +96,7 @@ function _compute_MC_SRE2_β(
     # create arrays of real doubles that will store real and impaginary part of the state across the grays code
     inVR = zeros(Float64, dim)
 
-    # @inline p2SAM, m2SAM, m3SAM = sample_MC(L, data(ψ), tmp1, tmp2, inVR)
-    if sample == :lib
-        # use the one-sample method
-        @inline p2SAM, m2SAM, m3SAM = sample_MClib(L, data(ψ), tmp1, tmp2, inVR)
-    elseif sample == :local
-        # use the two-sample method
-        @inline p2SAM, m2SAM, m3SAM = sample_MClocal(L, data(ψ), tmp1, tmp2, inVR)
-    else
-        @error "Invalid sample method: $sample. Use :lib or :local."
-    end
+    @inline p2SAM, m2SAM, m3SAM = sample_MC(L, data(ψ), tmp1, tmp2, inVR)
 
     # Batch RNG & tries outside the loop for performance
     randvals = rand(rng, dist, Nsamples)
