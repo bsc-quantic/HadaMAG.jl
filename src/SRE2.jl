@@ -80,7 +80,6 @@ function _compute_MC_SRE2_β(
     β::Float64,
     j::Int,
     tmpdir::String,
-    sample::Symbol,
 ) where {T}
     dim = length(data(ψ))
     L = qubits(ψ)
