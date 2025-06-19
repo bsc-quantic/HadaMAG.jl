@@ -603,7 +603,7 @@ _compute_chunk_SRE2(
         blend_muladd!(inVR, Xloc1, TMP1, Xloc2, TMP2)  # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
 
         # Do the fast Hadamard transform of the inVR
-        call_fht_doublelocal!(inVR, Int32(L))
+        call_fht_double(inVR, Int32(L))
 
         # the vectors obtained with FHT contain overlaps of given Pauli strings:
         # the Pauli strings are of the form XTAB[ix] (0...1 corresponding to Z operator)
