@@ -174,7 +174,7 @@ function _compute_MC_SRE2_β(
         if (z % ile == 0) && (n_p > 20)
             res = sum_p / n_p
             var = sum_p2 / n_p
-            @printf(io, "%d %.20f %.20f %.20f\n", z, res, m2ADD/dim, var)
+            @printf(io, "%d %.20f %.20f %.20f\n", z, res, m2SAM/dim, var)
         end
 
         # flush every FLUSH_INTERVAL log‐lines:
