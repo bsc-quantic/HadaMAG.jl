@@ -83,7 +83,7 @@ function _compute_MC_SRE2_β(
 ) where {T}
     dim = length(data(ψ))
     L = qubits(ψ)
-    p2SAM = m2SAM = m3SAM = 0.0
+    pnorm = mSAM = m3SAM = mval = 0.0
 
     rng = MersenneTwister(seed)
     dist = Uniform(0.0, 1.0)
@@ -96,7 +96,7 @@ function _compute_MC_SRE2_β(
     # create arrays of real doubles that will store real and impaginary part of the state across the grays code
     inVR = zeros(Float64, dim)
 
-    @inline p2SAM, m2SAM, m3SAM = sample_MC(L, data(ψ), tmp1, tmp2, inVR)
+    @inline pnorm, mval, m3val = sample_MC(L, data(ψ), tmp1, tmp2, inVR)
 
     # Batch RNG & tries outside the loop for performance
     randvals = rand(rng, dist, Nsamples)
@@ -130,7 +130,7 @@ function _compute_MC_SRE2_β(
 
         # CHECK: foldl is better?
         # build the XOR-mask by folding the table entries
-        # mask_acc   = foldl(⊻, BIT_MASK[whereA_vec]; init = zero(UInt64))
+        # mask_acc   = foldl(⊻, MASK_TABLE[whereA_vec]; init = zero(UInt64))
         mask_acc = zero(UInt64)
         @inbounds for w in whereA_vec
             mask_acc ⊻= MASK_TABLE[w]
@@ -140,125 +140,7 @@ function _compute_MC_SRE2_β(
         currX ⊻= mask_acc
         @inline apply_X_mask!(mask_acc, tmp1, tmp2)
 
-        @inline p2SAM, m2SAM, m3SAM = sample_MC(L, data(ψ), tmp1, tmp2, inVR)
-
-        # accept/reject with only one exponentiation
-        pβ = m2SAM^β
-        if (r < pβ/currPROB) && (currX != 0)
-            currPROB = pβ
-            currM2 = -log2(m2SAM)
-        else
-            # undo mask
-            currX ⊻= mask_acc
-
-            # CHECK: parallelize applyX is it useful for L large?
-            @inline apply_X_mask!(mask_acc, tmp1, tmp2)
-        end
-
-        # update stats
-        sum_p += currM2
-        sum_p2 += currM2^2
-        n_p += 1
-
-        # occasionally dump to disk
-        ile = z > 1 ? 2^(Int(floor(log2(z)/1.5))) : 10
-        if (z % ile == 0) && (n_p > 20)
-            res = sum_p / n_p
-            var = sum_p2 / n_p
-            @printf(io, "%d %.20f %.20f %.20f\n", z, res, m2SAM/dim, var)
-        end
-
-        # flush every FLUSH_INTERVAL log‐lines:
-        # if buf.size ≥ FLUSH_INTERVAL * 60  # rough bytes estimate
-        #     write(io, take!(buf)) # write + clear
-        # end
-    end
-
-    write(io, take!(buf)) # final flush
-
-    close(io)
-end
-
-function _compute_MC_SRE_β(
-    ψ::StateVec{T,2},
-    q::Number,
-    Nsamples::Int,
-    seed::Union{Nothing,Int},
-    β::Float64,
-    j::Int,
-    tmpdir::String,
-    sample::Symbol,
-) where {T}
-    dim = length(data(ψ))
-    L = qubits(ψ)
-    pnorm = mSAM = 0.0
-
-    rng = MersenneTwister(seed)
-    dist = Uniform(0.0, 1.0)
-
-    tmp1 = zeros(Float64, dim)
-    tmp2 = zeros(Float64, dim)
-
-    @inline compute_TMP!(tmp1, tmp2, data(ψ))
-
-    # create arrays of real doubles that will store real and impaginary part of the state across the grays code
-    inVR = zeros(Float64, dim)
-
-    @inline pnorm, mSAM = sample_MC(L, data(ψ), tmp1, tmp2, inVR)
-
-    # Batch RNG & tries outside the loop for performance
-    randvals = rand(rng, dist, Nsamples)
-    tries = floor.(Int, randvals .* 9) .+ 1 # each element ∈ 1:9
-    rs = rand(rng, dist, Nsamples) # vector of random in [0,1)
-
-    # Create a table of masks for each qubit position
-    MASK_TABLE = UInt64.(1) .<< (0:(L-1))
-
-    # Open file and init stats
-    filename = "_$(j)_$(seed).dat"
-    io = open(joinpath(tmpdir, filename), "w")
-    buf = IOBuffer()
-    sum_p = 0.0
-    sum_p2 = 0.0
-    n_p = 0
-    currPROB = 1e-120
-    currM2 = 0.0
-    currX = UInt64(0)
-
-    vq = Val(q) # Value type for q, used for method dispatch
-
-    FLUSH_INTERVAL = 1_000  # dump to file every FLUSH_INTERVAL iterations
-
-    # Main loop over precomputed draws
-    for idx = 1:Nsamples
-        z = idx - 1 # 0:(Nsamples-1) index
-        r = rs[idx] # pre‐drawn uniform
-        tr = tries[idx] # 1…9
-
-        # generate tr random numbers of qubits to flip
-        whereA_vec = rand(rng, 1:L, tr)
-
-        # CHECK: foldl is better?
-        # build the XOR-mask by folding the table entries
-        # mask_acc   = foldl(⊻, BIT_MASK[whereA_vec]; init = zero(UInt64))
-        mask_acc = zero(UInt64)
-        @inbounds for w in whereA_vec
-            mask_acc ⊻= MASK_TABLE[w]
-        end
-
-        # apply mask to current state
-        currX ⊻= mask_acc
-        @inline apply_X_mask!(mask_acc, tmp1, tmp2)
-
-        if sample == :lib
-            # use the one-sample method
-            @inline pnorm, mSAM = sample_SRE_lib(L, vq, data(ψ), tmp1, tmp2, inVR)
-        elseif sample == :local
-            # use the two-sample method
-            @inline pnorm, mSAM = sample_SRE_local(L, vq, data(ψ), tmp1, tmp2, inVR)
-        else
-            @error "Invalid sample method: $sample. Use :lib or :local."
-        end
+        @inline pnorm, mSAM, m3SAM = sample_MC(L, data(ψ), tmp1, tmp2, inVR)
 
         # accept/reject with only one exponentiation
         pβ = mSAM^β
@@ -283,7 +165,115 @@ function _compute_MC_SRE_β(
         if (z % ile == 0) && (n_p > 20)
             res = sum_p / n_p
             var = sum_p2 / n_p
-            @printf(io, "%d %.20f %.20f %.20f\n", z, res, mSAM/dim, var)
+            @printf(io, "%d %.20f %.20f %.20f\n", z, res, mval/dim, var)
+        end
+
+        # flush every FLUSH_INTERVAL log‐lines:
+        # if buf.size ≥ FLUSH_INTERVAL * 60  # rough bytes estimate
+        #     write(io, take!(buf)) # write + clear
+        # end
+    end
+
+    write(io, take!(buf)) # final flush
+
+    close(io)
+end
+
+function _compute_MC_SRE_β(
+    ψ::StateVec{T,2},
+    q::Number,
+    Nsamples::Int,
+    seed::Union{Nothing,Int},
+    β::Float64,
+    j::Int,
+    tmpdir::String,
+) where {T}
+    dim = length(data(ψ))
+    L = qubits(ψ)
+    pnorm = mSAM = mval = 0.0
+
+    rng = MersenneTwister(seed)
+    dist = Uniform(0.0, 1.0)
+    vq = Val(q) # Value type for q, used for method dispatch
+
+    tmp1 = zeros(Float64, dim)
+    tmp2 = zeros(Float64, dim)
+
+    @inline compute_TMP!(tmp1, tmp2, data(ψ))
+
+    # create arrays of real doubles that will store real and impaginary part of the state across the grays code
+    inVR = zeros(Float64, dim)
+
+    @inline pnorm, mval = sample_MC(L, vq, data(ψ), tmp1, tmp2, inVR)
+
+    # Batch RNG & tries outside the loop for performance
+    randvals = rand(rng, dist, Nsamples)
+    tries = floor.(Int, randvals .* 9) .+ 1 # each element ∈ 1:9
+    rs = rand(rng, dist, Nsamples) # vector of random in [0,1)
+
+    # Create a table of masks for each qubit position
+    MASK_TABLE = UInt64.(1) .<< (0:(L-1))
+
+    # Open file and init stats
+    filename = "_$(j)_$(seed).dat"
+    io = open(joinpath(tmpdir, filename), "w")
+    buf = IOBuffer()
+    sum_p = 0.0
+    sum_p2 = 0.0
+    n_p = 0
+    currPROB = 1e-120
+    currM2 = 0.0
+    currX = UInt64(0)
+
+    FLUSH_INTERVAL = 1_000  # dump to file every FLUSH_INTERVAL iterations
+
+    # Main loop over precomputed draws
+    for idx = 1:Nsamples
+        z = idx - 1 # 0:(Nsamples-1) index
+        r = rs[idx] # pre‐drawn uniform
+        tr = tries[idx] # 1…9
+
+        # generate tr random numbers of qubits to flip
+        whereA_vec = rand(rng, 1:L, tr)
+
+        # CHECK: foldl is better?
+        # build the XOR-mask by folding the table entries
+        # mask_acc   = foldl(⊻, BIT_MASK[whereA_vec]; init = zero(UInt64))
+        mask_acc = zero(UInt64)
+        @inbounds for w in whereA_vec
+            mask_acc ⊻= MASK_TABLE[w]
+        end
+
+        # apply mask to current state
+        currX ⊻= mask_acc
+        @inline apply_X_mask!(mask_acc, tmp1, tmp2)
+
+        @inline pnorm, mSAM = sample_MC(L, vq, data(ψ), tmp1, tmp2, inVR)
+
+        # accept/reject with only one exponentiation
+        pβ = mSAM^β
+        if (r < pβ/currPROB) && (currX != 0)
+            currPROB = pβ
+            currM2 = -log2(mSAM)
+        else
+            # undo mask
+            currX ⊻= mask_acc
+
+            # CHECK: parallelize applyX is it useful for L large?
+            @inline apply_X_mask!(mask_acc, tmp1, tmp2)
+        end
+
+        # update stats
+        sum_p += currM2
+        sum_p2 += currM2^2
+        n_p += 1
+
+        # occasionally dump to disk
+        ile = z > 1 ? 2^(Int(floor(log2(z)/1.5))) : 10
+        if (z % ile == 0) && (n_p > 20)
+            res = sum_p / n_p
+            var = sum_p2 / n_p
+            @printf(io, "%d %.20f %.20f %.20f\n", z, res, mval/dim, var)
         end
 
         # flush every FLUSH_INTERVAL log‐lines:
