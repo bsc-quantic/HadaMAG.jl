@@ -55,7 +55,7 @@ function process_files(seed; folder = ".", Nβ = 25)
     m2ADD_stds = Float64[]
     naccepted = Int64[]
 
-    # loop over j = 0 to 12 (inclusive)
+    # loop over the range of β values
     for i = 1:Nβ
         # compute β (x value)
         β = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
