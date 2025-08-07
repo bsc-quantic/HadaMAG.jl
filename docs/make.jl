@@ -6,7 +6,9 @@ makedocs(
     sitename = "HadaMAG.jl",
     pages = Any[
         "Home"=>"index.md",
-        "Manual"=>["Exact SRE"=>"manual/ExactSRE.md",
+        "Manual"=>[
+        "State Representation"=>"manual/State.md",
+        "Exact SRE"=>"manual/ExactSRE.md",
         "Custom FHT Library"=>"manual/CustomFHT.md",],
         # "Manual"=>["Exact SRE"=>"manual/Exact_SRE.md",
         #            "Monte Carlo SRE"=>"manual/Monte_Carlo_SRE.md",
