@@ -520,7 +520,7 @@ end
 """
     use_default_fht()
 
-Revert `call_fht!` back to the built-in FastHadamardStructuredTransforms_jll implementation.
+Revert `call_fht!` back to the built-in `FastHadamardStructuredTransforms_jll` implementation.
 """
 function use_default_fht()
     @info "Reverting to default FHT library"
