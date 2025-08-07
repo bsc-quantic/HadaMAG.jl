@@ -1,5 +1,6 @@
 using Printf
 using FastHadamardStructuredTransforms_jll
+using Libdl
 
 """
     MC_SRE2(ψ::StateVec{T,2}; backend = :auto, Nβ = 13, Nsamples = 1000, seed)
@@ -83,7 +84,7 @@ function _compute_MC_SRE2_β(
 ) where {T}
     dim = length(data(ψ))
     L = qubits(ψ)
-    pnorm = mSAM = m3SAM = mval = 0.0
+    pnorm = m2SAM = mval = 0.0
 
     rng = MersenneTwister(seed)
     dist = Uniform(0.0, 1.0)
@@ -96,7 +97,7 @@ function _compute_MC_SRE2_β(
     # create arrays of real doubles that will store real and impaginary part of the state across the grays code
     inVR = zeros(Float64, dim)
 
-    @inline pnorm, mval, m3val = sample_MC(L, data(ψ), tmp1, tmp2, inVR)
+    @inline pnorm, mval, m3val = sample_SRE2(L, data(ψ), tmp1, tmp2, inVR)
 
     # Batch RNG & tries outside the loop for performance
     randvals = rand(rng, dist, Nsamples)
@@ -140,13 +141,13 @@ function _compute_MC_SRE2_β(
         currX ⊻= mask_acc
         @inline apply_X_mask!(mask_acc, tmp1, tmp2)
 
-        @inline pnorm, mSAM, m3SAM = sample_MC(L, data(ψ), tmp1, tmp2, inVR)
+        @inline pnorm, m2SAM = sample_SRE2(L, data(ψ), tmp1, tmp2, inVR)
 
         # accept/reject with only one exponentiation
-        pβ = mSAM^β
+        pβ = m2SAM^β
         if (r < pβ/currPROB) && (currX != 0)
             currPROB = pβ
-            currM2 = -log2(mSAM)
+            currM2 = -log2(m2SAM)
         else
             # undo mask
             currX ⊻= mask_acc
@@ -204,7 +205,7 @@ function _compute_MC_SRE_β(
     # create arrays of real doubles that will store real and impaginary part of the state across the grays code
     inVR = zeros(Float64, dim)
 
-    @inline pnorm, mval = sample_MC(L, vq, data(ψ), tmp1, tmp2, inVR)
+    @inline pnorm, mval = sample_SRE(L, vq, data(ψ), tmp1, tmp2, inVR)
 
     # Batch RNG & tries outside the loop for performance
     randvals = rand(rng, dist, Nsamples)
@@ -248,7 +249,7 @@ function _compute_MC_SRE_β(
         currX ⊻= mask_acc
         @inline apply_X_mask!(mask_acc, tmp1, tmp2)
 
-        @inline pnorm, mSAM = sample_MC(L, vq, data(ψ), tmp1, tmp2, inVR)
+        @inline pnorm, mSAM = sample_SRE(L, vq, data(ψ), tmp1, tmp2, inVR)
 
         # accept/reject with only one exponentiation
         pβ = mSAM^β
@@ -287,7 +288,24 @@ function _compute_MC_SRE_β(
     close(io)
 end
 
-@fastmath function sample_MC(
+@fastmath function sample_SRE2(
+    L::Int,
+    X::AbstractVector{ComplexF64},
+    tmp1::AbstractVector{Float64},
+    tmp2::AbstractVector{Float64},
+    inVR::AbstractVector{Float64},
+)
+    @inline blend_fallback_muladd!(inVR, X, tmp1, tmp2)
+
+    # Perform Fast Hadamard Transform
+    call_fht!(inVR, Int32(L))
+
+    @inline psam, m2sam = compute_moments(inVR)
+
+    return psam / 2^L, m2sam
+end
+
+@fastmath function sample_SRE(
     L::Int,
     vq::Val,
     X::AbstractVector{ComplexF64},
@@ -298,21 +316,13 @@ end
     @inline blend_fallback_muladd!(inVR, X, tmp1, tmp2)
 
     # Perform Fast Hadamard Transform
-    call_fht_double!(inVR, Int32(L))
+    call_fht!(inVR, Int32(L))
 
-    msam = psam = 0.0
-
-    psam, msam = compute_moments(inVR, vq)
+    @inline psam, msam = compute_moments(inVR, vq)
 
     return psam / 2^L, msam
 end
 
-"""
-    compute_moments(inVR::AbstractVector{Float64})
-
-Compute the second, fourth, and sixth moments of the input vector inVR.
-The moments are computed using SIMD operations for performance.
-"""
 @fastmath function compute_moments(inVR, ::Val{2})
     T = eltype(inVR)
     s2 = zero(T)
@@ -322,9 +332,7 @@ The moments are computed using SIMD operations for performance.
         y2 = x*x # x²
 
         s2 += y2 # plain sum of squares
-
-        # fuse y2*y2 + s4  →  s4 += x⁴
-        s4 = muladd(y2, y2, s4)
+        s4 = muladd(y2, y2, s4) # fuse y2*y2 + s4  →  s4 += x⁴
     end
 
     return s2, s4
@@ -339,7 +347,6 @@ end
         y2 = x*x # x²
 
         s2 += y2 # plain sum of squares
-
         s4 += y2 ^ q
     end
 
@@ -359,34 +366,35 @@ The operation is performed in-place, modifying inVR directly.
     return nothing
 end
 
-"""
-    compute_moments(inVR::AbstractVector{Float64})
+# """
+#     compute_moments(inVR::AbstractVector{Float64})
 
-Compute the second, fourth, and sixth moments of the input vector inVR.
-The moments are computed using SIMD operations for performance.
-"""
-@fastmath function compute_moments(inVR)
-    T = eltype(inVR)
-    s2 = zero(T)
-    s4 = zero(T)
-    s6 = zero(T)
+# Compute the second, fourth, and sixth moments of the input vector inVR.
+# The moments are computed using SIMD operations for performance.
+# """
+# @fastmath function compute_moments(inVR)
+#     T = eltype(inVR)
+#     s2 = zero(T)
+#     s4 = zero(T)
+#     s6 = zero(T)
 
-    @inbounds @fastmath @simd for x in inVR
-        # x²
-        y2 = x*x
-        # plain sum of squares
-        s2 += y2
+#     @inbounds @fastmath @simd for x in inVR
+#         # x²
+#         y2 = x*x
+#         # plain sum of squares
+#         s2 += y2
 
-        # fuse y2*y2 + s4  →  s4 += x⁴
-        s4 = muladd(y2, y2, s4)
+#         # fuse y2*y2 + s4  →  s4 += x⁴
+#         s4 = muladd(y2, y2, s4)
 
-        # fuse (x⁴)*x² + s6  →  s6 += x⁶
-        s6 = muladd(y2*y2, y2, s6)
-    end
+#         # fuse (x⁴)*x² + s6  →  s6 += x⁶
+#         s6 = muladd(y2*y2, y2, s6)
+#     end
 
-    return s2, s4, s6
-end
+#     return s2, s4, s6
+# end
 
+# TODO: Test apply_X! multithreaded
 """
     apply_X!(site, Xs...)
 
@@ -406,8 +414,6 @@ to each vector in `Xs`.  All vectors must have the same length.
     end
     return nothing
 end
-
-# TODO: Test apply_X! multithreaded
 
 """
     apply_X_mask!(mask::UInt, Xs::AbstractVector{T}...) where {T}
@@ -460,23 +466,6 @@ end
     return a, b
 end
 
-@fastmath function sample_MC(
-    L::Int,
-    X::AbstractVector{ComplexF64},
-    tmp1::AbstractVector{Float64},
-    tmp2::AbstractVector{Float64},
-    inVR::AbstractVector{Float64},
-)
-    @inline blend_fallback_muladd!(inVR, X, tmp1, tmp2)
-
-    # Perform Fast Hadamard Transform
-    call_fht_double!(inVR, Int32(L))
-
-    @inline PS2, MS2, MS3 = compute_moments(inVR)
-
-    return PS2 / 2^L, MS2, MS3
-end
-
 """
     compute_tmp!(tmp1::AbstractVector{T}, tmp2::AbstractVector{T}, X::AbstractVector{Complex{T}})
 
@@ -497,21 +486,55 @@ Compute the tmp1 and tmp2 vectors in-place using SIMD operations. tmp1 = real(X)
     return nothing
 end
 
-function call_fht_double!(inVR::Vector{Float64}, L::Int32)
-    # Ensure the input array is contiguous in memory
-    inVR_ptr = pointer(inVR)
+# Two Ref containers to hold the function pointer and the default function
+const _fht_fn = Ref{Function}()
+const _default_fht_fn = Ref{Function}()
 
-    # Perform the ccall
-    ccall(
-        (:fht_double, FastHadamardStructuredTransforms_jll.libfasttransforms),
-        Cvoid,                            # Return type
-        (Ptr{Cdouble}, Cint),             # Argument types
-        inVR_ptr,
-        L,
+# Initialize the default function pointer to the JLL library function
+_default_fht_fn[] = (vec, L) -> ccall(
+    (:fht_double, FastHadamardStructuredTransforms_jll.libfasttransforms),
+    Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L
+)
+
+_fht_fn[] = _default_fht_fn[]
+
+
+"""
+    use_fht_lib(path::String)
+
+Point at your own compiled `.so` that exports exactly the symbol `:fht_double`.
+After calling this, every `call_fht!` will invoke your library instead of the JLL one.
+"""
+function use_fht_lib(path::String)
+    handle = dlopen(path, Libdl.RTLD_LAZY | Libdl.RTLD_DEEPBIND)
+    ptr    = dlsym(handle, :fht_double)
+    @assert ptr != C_NULL "couldn't find symbol :fht_double in $path"
+    @info "Using custom FHT library at $path"
+    _fht_fn[] = (vec, L) -> ccall(
+        ptr,
+        Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L
     )
-
-    return inVR  # Assuming the function modifies the array in place
+    nothing
 end
+
+"""
+    use_default_fht()
+
+Revert `call_fht!` back to the built-in FastHadamardStructuredTransforms_jll implementation.
+"""
+function use_default_fht()
+    @info "Reverting to default FHT library"
+    _fht_fn[] = _default_fht_fn[]
+    nothing
+end
+
+"""
+    call_fht!(vec::Vector{Float64}, L::Int32)
+
+In‐place fast Hadamard transform.  After an optional call to `use_fht_lib`,
+this will call through your `.so` instead of the default JLL library.
+"""
+call_fht!(vec::Vector{Float64}, L::Int32) = (_fht_fn[])(vec, L)
 
 # TODO: add a comment or fix the description here
 # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
@@ -583,7 +606,7 @@ _compute_chunk_SRE2(
         blend_muladd!(inVR, Xloc1, TMP1, Xloc2, TMP2)  # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
 
         # Do the fast Hadamard transform of the inVR
-        call_fht_double!(inVR, Int32(L))
+        call_fht!(inVR, Int32(L))
 
         # the vectors obtained with FHT contain overlaps of given Pauli strings:
         # the Pauli strings are of the form XTAB[ix] (0...1 corresponding to Z operator)
@@ -606,6 +629,7 @@ _compute_chunk_SRE2(
         if ix + index < dim
             @inline apply_X!(Zwhere[ix] - 1, TMP1, TMP2)
         end
+
     end
 
     return p2SAM, m2SAM, m3SAM
@@ -620,6 +644,16 @@ _compute_chunk_SRE(
     XTAB::Vector{UInt64},
 ) = _compute_chunk_SRE(Val(q), 0, istart, iend, ψ, Zwhere, XTAB)
 
+_compute_chunk_SRE(
+    index::Int64,
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    q::Number,
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+) = _compute_chunk_SRE(Val(q), index, istart, iend, ψ, Zwhere, XTAB)
+
 @fastmath function _compute_chunk_SRE(
     ::Val{q},
     index::Int64,
@@ -632,7 +666,7 @@ _compute_chunk_SRE(
     L = qubits(ψ)
     dim = 2^L
 
-    p2SAM = m2SAM = m3SAM = 0.0
+    p2SAM = mSAM = 0.0
 
     TMP1 = zeros(Float64, dim)
     TMP2 = zeros(Float64, dim)
@@ -665,18 +699,16 @@ _compute_chunk_SRE(
         blend_muladd!(inVR, Xloc1, TMP1, Xloc2, TMP2)  # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
 
         # Do the fast Hadamard transform of the inVR
-        call_fht_double!(inVR, Int32(L))
+        call_fht!(inVR, Int32(L))
 
         # the vectors obtained with FHT contain overlaps of given Pauli strings:
         # the Pauli strings are of the form XTAB[ix] (0...1 corresponding to Z operator)
         # so to calculate SRE we have to add entries of the resulting vector with the specified powers
         # (depending on the index of SRE we calculate)
         for r = 1:dim
-            # p = copy(inVR[r])
             pnorm = inVR[r] ^ 2 #+ inVI[r] * inVI[r]
-
-            m2SAM += pnorm ^ q
-            # m2SAM += sum_val(pnorm) # Use the precomputed function to sum powers
+            p2SAM += pnorm
+            mSAM += pnorm ^ q
         end
 
         # this takes us from Pauli string at given position of the Greys code to the next one
@@ -686,7 +718,346 @@ _compute_chunk_SRE(
         end
     end
 
-    return p2SAM, m2SAM, m3SAM
+    return p2SAM, mSAM, m3SAM
+end
+
+_compute_chunk_SRE_v2(
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    q::Number,
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64},
+    TMP2::Vector{Float64},
+    Xloc1::Vector{Float64},
+    Xloc2::Vector{Float64},
+) = _compute_chunk_SRE_v2(Val(q), 0, istart, iend, ψ, Zwhere, XTAB, TMP1, TMP2, Xloc1, Xloc2)
+
+_compute_chunk_SRE_v2(
+    index::Int64,
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    q::Number,
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64},
+    TMP2::Vector{Float64},
+    Xloc1::Vector{Float64},
+    Xloc2::Vector{Float64},
+) = _compute_chunk_SRE_v2(Val(q), index, istart, iend, ψ, Zwhere, XTAB, TMP1, TMP2, Xloc1, Xloc2)
+
+# Here we do the work unitl "for ix = istart:iend" before and then mpi
+@fastmath function _compute_chunk_SRE_v2(
+    ::Val{q},
+    index::Int64,
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64},
+    TMP2::Vector{Float64},
+    Xloc1::Vector{Float64},
+    Xloc2::Vector{Float64},
+)::Tuple{Float64,Float64,Float64} where {q}
+    L = qubits(ψ)
+    dim = 2^L
+
+    p2SAM = mSAM = 0.0
+
+    # create arrays of real doubles that will store real and impaginary part of the state across the Gray's code
+    inVR = zeros(Float64, dim)
+
+    # for given Pauli string at position istart, specified in XTAB, act with appropriate X_j operators
+    for el = 1:L
+        bits = XTAB[istart]
+        bitval = (bits >> (el - 1)) & 0x1 # el runs from 1, 2, 3,... we need (el-1) in Julia, so that el=1 picks out the least-significant bit.
+        if bitval == 1
+            @inline apply_X!(el - 1, TMP1, TMP2) # Act with the X operators that are 1 in Gray's code
+        end
+    end
+
+    # the worker will update the state TMP when going through the greys code form istart to iend
+    for ix = istart:iend
+        # we compute such a vector related to the state (Xloc) and its propagated version along the Gray's code (TMP)
+        blend_muladd!(inVR, Xloc1, TMP1, Xloc2, TMP2)  # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
+
+        # Do the fast Hadamard transform of the inVR
+        call_fht!(inVR, Int32(L))
+
+        # the vectors obtained with FHT contain overlaps of given Pauli strings:
+        # the Pauli strings are of the form XTAB[ix] (0...1 corresponding to Z operator)
+        # so to calculate SRE we have to add entries of the resulting vector with the specified powers
+        # (depending on the index of SRE we calculate)
+        for r = 1:dim
+            pnorm = inVR[r] ^ 2 #+ inVI[r] * inVI[r]
+            p2SAM += pnor
+            mSAM += pnorm ^ q
+        end
+
+        # this takes us from Pauli string at given position of the Greys code to the next one
+        # (by a single action of X_j operator )
+        if ix + index < dim
+            @inline apply_X!(Zwhere[ix] - 1, TMP1, TMP2)
+        end
+    end
+
+    return p2SAM, mSAM
+end
+
+# Here we do the work unitl "for ix = istart:iend" before and then mpi
+@fastmath function _compute_chunk_SRE_v2(
+    ::Val{2},
+    index::Int64,
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64},
+    TMP2::Vector{Float64},
+    Xloc1::Vector{Float64},
+    Xloc2::Vector{Float64},
+)::Tuple{Float64,Float64,Float64}
+    L = qubits(ψ)
+    dim = 2^L
+
+    p2SAM = m2SAM = 0.0
+
+    # create arrays of real doubles that will store real and impaginary part of the state across the Gray's code
+    inVR = zeros(Float64, dim)
+
+    # for given Pauli string at position istart, specified in XTAB, act with appropriate X_j operators
+    for el = 1:L
+        bits = XTAB[istart]
+        bitval = (bits >> (el - 1)) & 0x1 # el runs from 1, 2, 3,... we need (el-1) in Julia, so that el=1 picks out the least-significant bit.
+        if bitval == 1
+            @inline apply_X!(el - 1, TMP1, TMP2) # Act with the X operators that are 1 in Gray's code
+        end
+    end
+
+    # the worker will update the state TMP when going through the greys code form istart to iend
+    for ix = istart:iend
+        # we compute such a vector related to the state (Xloc) and its propagated version along the Gray's code (TMP)
+        blend_muladd!(inVR, Xloc1, TMP1, Xloc2, TMP2)  # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
+
+        # Do the fast Hadamard transform of the inVR
+        call_fht!(inVR, Int32(L))
+
+        # the vectors obtained with FHT contain overlaps of given Pauli strings:
+        # the Pauli strings are of the form XTAB[ix] (0...1 corresponding to Z operator)
+        # so to calculate SRE we have to add entries of the resulting vector with the specified powers
+        # (depending on the index of SRE we calculate)
+        for r = 1:dim
+            pnorm = inVR[r] ^ 2 #+ inVI[r] * inVI[r]
+            p2SAM += pnorm
+            m2SAM += pnorm ^ 2
+        end
+
+        # this takes us from Pauli string at given position of the Greys code to the next one
+        # (by a single action of X_j operator )
+        if ix + index < dim
+            @inline apply_X!(Zwhere[ix] - 1, TMP1, TMP2)
+        end
+    end
+
+    return p2SAM, m2SAM
+end
+
+_compute_chunk_SRE_v23(
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    q::Number,
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64},
+    TMP2::Vector{Float64},
+    Xloc1::Vector{Float64},
+    Xloc2::Vector{Float64},
+) = _compute_chunk_SRE_v23(Val(q), 0, istart, iend, ψ, Zwhere, XTAB, TMP1, TMP2, Xloc1, Xloc2)
+
+_compute_chunk_SRE_v23(
+    index::Int64,
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    q::Number,
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64},
+    TMP2::Vector{Float64},
+    Xloc1::Vector{Float64},
+    Xloc2::Vector{Float64},
+) = _compute_chunk_SRE_v23(Val(q), index, istart, iend, ψ, Zwhere, XTAB, TMP1, TMP2, Xloc1, Xloc2)
+
+@fastmath function _compute_chunk_SRE_v23(
+    ::Val{q},
+    index::Int64,
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64},
+    TMP2::Vector{Float64},
+    Xloc1::Vector{Float64},
+    Xloc2::Vector{Float64},
+)::Tuple{Float64,Float64,Float64} where {q}
+    L = qubits(ψ)
+    dim = 2^L
+
+    p2SAM = mSAM = 0.0
+
+    L   = qubits(ψ)
+    dim = 1<<L
+    inVR = zeros(Float64, dim)
+
+    # Loop over this thread’s chunk in Gray-code order:
+    @inbounds for ix = istart:(iend)
+        anypassed = false
+
+        if ix == istart
+            # initial setup (step 0 of Gray code): apply all bits in XTAB[istart]
+            for site in 0:(L-1)
+                if ((XTAB[istart] >> site) & 0x1) == 1
+                    anypassed = true
+                    # swap+blend for that site
+                    @inline flip_and_update!(site, dim, TMP1, TMP2, Xloc1, Xloc2, inVR)
+                end
+            end
+
+            if !anypassed
+                # if no bit was passed, we just blend the vectors
+                blend_muladd!(inVR, Xloc1, TMP1, Xloc2, TMP2) # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
+            end
+        else
+            # advance one Gray‐code step by flipping bit Zwhere[ix-1]
+            if ix - 1 + index < dim
+                site = Zwhere[ix-1] - 1
+                @inline flip_and_update!(site, dim, TMP1, TMP2, Xloc1, Xloc2, inVR)
+            end
+        end
+
+        # --- now do the big transform + reduction
+        call_fht!(inVR, Int32(L))
+
+        @inbounds @simd for r in 1:dim
+            pnorm = inVR[r] ^ 2
+            p2SAM += pnorm
+            mSAM += pnorm ^ q
+        end
+    end
+
+    return p2SAM, mSAM
+end
+
+@fastmath function _compute_chunk_SRE_v23(
+    ::Val{2},
+    index::Int64,
+    istart::Int64,
+    iend::Int64,
+    ψ::StateVec{Float64,2},
+    Zwhere::Vector{Int64},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64},
+    TMP2::Vector{Float64},
+    Xloc1::Vector{Float64},
+    Xloc2::Vector{Float64},
+)::Tuple{Float64,Float64}
+    L = qubits(ψ)
+    dim = 2^L
+
+    p2SAM = m2SAM = 0.0
+
+    L   = qubits(ψ)
+    dim = 1<<L
+    inVR = zeros(Float64, dim)
+
+    m2SAM = 0.0
+
+    # Loop over this thread’s chunk in Gray-code order:
+    for ix = istart:(iend)
+        anypassed = false
+        if ix == istart
+            # --- initial setup (step 0 of Gray code): apply all bits in XTAB[istart]
+            for site in 0:(L-1)
+                if ((XTAB[istart] >> site) & 0x1) == 1
+                    anypassed = true
+                    # swap+blend for that site
+                    @inline flip_and_update!(site, dim, TMP1, TMP2, Xloc1, Xloc2, inVR)
+                end
+            end
+
+            if !anypassed
+                # if no bit was passed, we just blend the vectors
+                @inline blend_muladd!(inVR, Xloc1, TMP1, Xloc2, TMP2)  # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
+            end
+        else
+            # --- advance one Gray‐code step by flipping bit Zwhere[ix-1]
+            if ix - 1 + index < dim
+                site = Zwhere[ix-1] - 1
+                @inline flip_and_update!(site, dim, TMP1, TMP2, Xloc1, Xloc2, inVR)
+            end
+        end
+
+        @inline call_fht!(inVR, Int32(L))
+
+        @inbounds @simd for r in 1:dim
+            pnorm = inVR[r] ^ 2
+            p2SAM += pnorm
+            m2SAM += pnorm ^ 2
+        end
+    end
+
+    return p2SAM, m2SAM
+end
+
+"""
+    flip_and_update!(
+        site::Int, dim::Int,
+        TMP1::AbstractVector{T}, TMP2::AbstractVector{T},
+        X1::AbstractVector{T},  X2::AbstractVector{T},
+        inVR::AbstractVector{T}
+    ) where T<:AbstractFloat
+
+Perform the in-place “butterfly” swap + FMA updates on `TMP1`, `TMP2`, and `inVR`
+corresponding to flipping the single bit at position `site`.
+Executes exactly `dim/2` iterations (no branches), computing each pair of indices
+on the fly so that the loop is fully SIMD-vectorizable.
+"""
+@inline @fastmath function flip_and_update!(
+    site::Int, dim::Int,
+    TMP1::AbstractVector{T}, TMP2::AbstractVector{T},
+    X1::AbstractVector{T},  X2::AbstractVector{T},
+    inVR::AbstractVector{T}
+) where {T<:AbstractFloat}
+    stride     = 1 << site
+    period2    = stride << 1
+    half_pairs = dim >>> 1
+
+    @inbounds @simd for k in 0:(half_pairs-1)
+        # compute indices
+        block  = k >>> site
+        offset = k & (stride - 1)
+        base   = block * period2
+        i      = base + offset + 1
+        j      = i + stride
+
+        # swap in TMP1/TMP2
+        t1i = TMP1[i]; t1j = TMP1[j]
+        TMP1[i] = t1j; TMP1[j] = t1i
+
+        t2i = TMP2[i]; t2j = TMP2[j]
+        TMP2[i] = t2j; TMP2[j] = t2i
+
+        # fused multiply‐add update
+        inVR[i] = muladd(X1[i], t1j, X2[i] * t2j)
+        inVR[j] = muladd(X1[j], t1i, X2[j] * t2i)
+    end
+    return nothing
 end
 
 """
@@ -725,6 +1096,78 @@ Throws an error if `length(ψ)` isn’t a power of 3 or `site` ∉ 1:n.
     end
 
     return ψ
+end
+
+# Do the naive 4^N implementation of SRE2, which is not efficient but serves as a reference.
+function naive_SRE2(ψ::Vector{ComplexF64})
+    N = length(ψ)
+    # check that N is a power of two, set n = # qubits
+    n = Int(round(log2(N)))
+    2^n != N && error("length(ψ) = $N is not 2^n")
+
+    # define the single‐qubit Pauli matrices
+    σI = [1.0 0.0; 0.0 1.0]
+    σX = [0.0 1.0; 1.0 0.0]
+    σY = [0.0 -im; im 0.0]
+    σZ = [1.0 0.0; 0.0 -1.0]
+    Paulis = (σI, σX, σY, σZ)
+
+    acc = 0.0
+    # loop over all 4^n Pauli strings
+    Threads.@threads for idx in 0:(4^n - 1)
+        # decode idx into base‐4 “digits” p[1],…,p[n] in {0,1,2,3}
+        tmp = idx
+        P = Paulis[(tmp % 4) + 1]
+        tmp ÷= 4
+        # build the full n‐qubit operator P = P₁ ⊗ P₂ ⊗ … ⊗ Pₙ
+        for _ in 2:n
+            P = kron(P, Paulis[(tmp % 4) + 1])
+            tmp ÷= 4
+        end
+        # expectation value ⟨ψ|P|ψ⟩ is real for Hermitian P (up to numerical noise)
+        exp_val = real(ψ' * (P * ψ))
+        acc += exp_val^4
+    end
+
+    # normalize by 2^n and take −log₂
+    return -log2(acc / N)
+end
+
+"""
+    naive_SRE(ψ::Vector{Complex{T}}, k::Integer) where {T}
+
+Compute the “naive” stabilizer-Rényi entropy of integer order `k` for an n-qubit pure state ψ
+(of length 2ⁿ).
+"""
+function naive_SRE(ψ::Vector{Complex{T}}, k::Integer) where {T<:Real}
+    N = length(ψ)
+    n = Int(round(log2(N)))
+    2^n != N && error("length(ψ) = $N is not 2^n")
+    # single-qubit Paulis
+    σI = [1.0 0.0; 0.0 1.0]
+    σX = [0.0 1.0; 1.0 0.0]
+    σY = [0.0 -im; im 0.0]
+    σZ = [1.0 0.0; 0.0 -1.0]
+    Paulis = (σI, σX, σY, σZ)
+
+    acc = 0.0
+    # loop over all 4^n Pauli strings
+    for idx in 0:(4^n - 1)
+        tmp = idx
+        # build P = P₁⊗…⊗Pₙ by decoding idx in base-4
+        P = Paulis[(tmp % 4) + 1];  tmp ÷= 4
+        for _ in 2:n
+            P = kron(P, Paulis[(tmp % 4) + 1])
+            tmp ÷= 4
+        end
+
+        # expectation ⟨ψ|P|ψ⟩ (should be real up to numerical noise)
+        e = real(ψ' * (P * ψ))
+        acc += e^(2*k)
+    end
+
+    # final SRE_k = −log₂[(1/2^n) Σ e^(2k)]
+    return -log2(acc / N)
 end
 
 @fastmath function actX_qutrit!(ψ::Vector{Complex{T}}, site::Integer, k::Integer) where {T}
@@ -818,7 +1261,7 @@ _compute_chunk_mana_SRE(
 
         # this takes us from Pauli string at given position of the Greys code to the next one
         # (by a single action of X_j operator )
-        if ix < dim
+        if ix + index < dim
             @inline actX_qutrit!(TMP, Zwhere[ix])
         end
 
