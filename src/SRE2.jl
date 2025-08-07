@@ -56,6 +56,7 @@ end
     SRE(ψ::StateVec{T,2}; backend = :auto)
 
 Compute the exact Stabilizer Renyi entropy (q) of a quantum state ψ using the HadaMAG algorithm.
+Returns the SRE value and the lost norm of the state vector.
 
 # Arguments
 - `ψ`: A [`StateVec`](@ref) object representing the quantum state.
@@ -662,7 +663,7 @@ _compute_chunk_SRE(
     ψ::StateVec{Float64,2},
     Zwhere::Vector{Int64},
     XTAB::Vector{UInt64},
-)::Tuple{Float64,Float64,Float64} where {q}
+)::Tuple{Float64,Float64} where {q}
     L = qubits(ψ)
     dim = 2^L
 
@@ -718,7 +719,7 @@ _compute_chunk_SRE(
         end
     end
 
-    return p2SAM, mSAM, m3SAM
+    return p2SAM, mSAM
 end
 
 _compute_chunk_SRE_v2(
@@ -761,7 +762,7 @@ _compute_chunk_SRE_v2(
     TMP2::Vector{Float64},
     Xloc1::Vector{Float64},
     Xloc2::Vector{Float64},
-)::Tuple{Float64,Float64,Float64} where {q}
+)::Tuple{Float64,Float64} where {q}
     L = qubits(ψ)
     dim = 2^L
 
@@ -820,7 +821,7 @@ end
     TMP2::Vector{Float64},
     Xloc1::Vector{Float64},
     Xloc2::Vector{Float64},
-)::Tuple{Float64,Float64,Float64}
+)::Tuple{Float64,Float64}
     L = qubits(ψ)
     dim = 2^L
 
@@ -905,7 +906,7 @@ _compute_chunk_SRE_v23(
     TMP2::Vector{Float64},
     Xloc1::Vector{Float64},
     Xloc2::Vector{Float64},
-)::Tuple{Float64,Float64,Float64} where {q}
+)::Tuple{Float64,Float64} where {q}
     L = qubits(ψ)
     dim = 2^L
 
