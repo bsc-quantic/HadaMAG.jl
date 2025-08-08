@@ -13,9 +13,7 @@ Key features:
 - **Monte Carlo SRE** – Estimates the SRE using stochastic sampling.
 - **Mana for qutrits** – Monte Carlo computation of magic-state mana for qutrit systems.
 - **Multiple backends** – Choose between single-threaded, multi-threaded, and MPI+threads execution.
-
-> **Performance tip:** For large numbers of qubits ($N > 16$), you can gain ~30% speedup by compiling and linking your own optimized **FFHT** library. See the [Custom FHT Library guide](https://bsc-quantic.github.io/HadaMAG.jl/dev/manual/CustomFHT/) for details.
-
+-
 ---
 
 ## Installation
