@@ -14,15 +14,15 @@
             @testset "SerialBackend" begin
 
                 # test that we get the same results with same seed
-                m2_serial = MC_SRE2(ψ; backend = :serial, seed = 123)
-                @test MC_SRE2(ψ; backend = :serial, seed = 123) ≈ m2_serial
+                m2_serial = MC_SRE(ψ, 2; backend = :serial, seed = 123)
+                @test MC_SRE(ψ; backend = :serial, seed = 123) ≈ m2_serial
             end
 
             @testset "MPIThreadsBackend" begin
 
                 # test that we get the same results with same seed
-                m2_mpi = MC_SRE2(ψ; backend = :mpi_threads, seed = 123)
-                @test MC_SRE2(ψ; backend = :mpi_threads, seed = 123) ≈ m2_mpi
+                m2_mpi = MC_SRE(ψ, 2; backend = :mpi_threads, seed = 123)
+                @test MC_SRE(ψ, 2; backend = :mpi_threads, seed = 123) ≈ m2_mpi
             end
 
             # Compare the results from both backends
@@ -30,8 +30,8 @@
         end
 
         @testset "Exact SRE2" begin
-            m2_exact_serial, _ = SRE2(ψ; backend = :serial)
-            m2_exact_threads, _ = SRE2(ψ; backend = :mpi_threads)
+            m2_exact_serial, lost_norm_serial = SRE(ψ, 2; backend = :serial)
+            m2_exact_threads, lost_norm_threads = SRE(ψ, 2; backend = :mpi_threads)
 
             # test that we get the same results with both backends
             @test m2_exact_serial ≈ m2_exact_threads
