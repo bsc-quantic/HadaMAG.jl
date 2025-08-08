@@ -3,9 +3,7 @@ using LinearAlgebra
 using JLD2
 using NPZ
 
-"""
-    StateVec
-
+"""# HadaMAG.jl: StateVec
 A lightweight container for a pure quantum state of `n` *q*-dits
 (`q` = qudit dimension, 2 for qubits) stored in the computational basis
 |0⋯00⟩, |0⋯01⟩, …, |q−1⋯(q−1)⟩.
