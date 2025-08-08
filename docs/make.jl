@@ -9,6 +9,7 @@ makedocs(
         "Manual"=>[
         "State Representation"=>"manual/State.md",
         "Exact SRE"=>"manual/ExactSRE.md",
+        "Backend Configuration"=>"manual/Backends.md",
         "Custom FHT Library"=>"manual/CustomFHT.md",],
         # "Manual"=>["Exact SRE"=>"manual/Exact_SRE.md",
         #            "Monte Carlo SRE"=>"manual/Monte_Carlo_SRE.md",
