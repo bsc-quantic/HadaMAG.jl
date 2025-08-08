@@ -3,8 +3,8 @@
 The Stabilizer Rényi Entropy (SRE) of order $q$ is a measure of the non-stabilizer content of a pure quantum state $| ψ ⟩$.
 Under the hood, `HadaMAG.SRE(ψ, q)` dispatches to one of several backends (`:serial`, `:threads`, or `:mpi`) and uses a sequence of Fast Hadamard Transforms to reduce the naive $O(4^n)$ sum down to $O(n2^n)$ work.
 
-By default, `backend = :auto` picks the best available engine, but you can override it if you want to force single-threaded, multi-threaded, or MPI-based execution.
-For more on choosing backends, see the [Backend Configuration](backends.html) guide.
+By default, `backend = :auto` chooses the fastest available execution engine.
+For details on available backends and MPI usage, see the [Backend Configuration](Backends.html) guide.
 
 ## Usage
 
