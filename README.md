@@ -2,14 +2,14 @@
 
 ![Build Status](https://github.com/bsc-quantic/HadaMAG.jl/actions/workflows/CI.yml/badge.svg?branch=master)
 
-**High-performance Stabilizer Rényi Entropy calculations in Julia**
+> High-performance Stabilizer Rényi Entropy calculations in Julia
 
 `HadaMAG.jl` is an optimized Julia library for computing the **Stabilizer Rényi Entropy (SRE)** of pure quantum states.
 It is designed for both research and high‐performance computing environments, with support for **multi-threading** and **MPI**.
 
 Key features:
 
-- **Exact SRE** – Computes the SRE exactly using the **HadaMAG algorithm**, which applies a sequence of **Fast Hadamard Transforms (FHT)** to reduce the naive $O(4^n)$ cost down to $O(n 2^n)$. Under the hood, this uses the high‐performance [FFHT](https://github.com/FALCONN-LIB/FFHT) C library for Fast Hadamard Transforms.
+- **Exact SRE** – Computes the SRE exactly using the **HadaMAG algorithm**, which applies a sequence of Fast Hadamard Transforms (FHT) to reduce the naive $O(4^n)$ cost down to $O(n 2^n)$.
 - **Monte Carlo SRE** – Estimates the SRE using stochastic sampling.
 - **Mana for qutrits** – Monte Carlo computation of magic-state mana for qutrit systems.
 - **Multiple backends** – Choose between single-threaded, multi-threaded, and MPI+threads execution.
