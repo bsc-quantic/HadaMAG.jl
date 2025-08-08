@@ -15,7 +15,7 @@
 
                 # test that we get the same results with same seed
                 m2_serial = MC_SRE(ψ, 2; backend = :serial, seed = 123)
-                @test MC_SRE(ψ; backend = :serial, seed = 123) ≈ m2_serial
+                @test MC_SRE(ψ, 2; backend = :serial, seed = 123) ≈ m2_serial
             end
 
             @testset "MPIThreadsBackend" begin
