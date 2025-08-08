@@ -13,7 +13,6 @@ Key features:
 - **Monte Carlo SRE** – Estimates the SRE using stochastic sampling.
 - **Mana for qutrits** – Monte Carlo computation of magic-state mana for qutrit systems.
 - **Multiple backends** – Choose between single-threaded, multi-threaded, and MPI+threads execution.
--
 ---
 
 ## Installation
