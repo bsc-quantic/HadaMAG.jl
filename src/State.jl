@@ -65,7 +65,7 @@ function Base.show(io::IO, ::MIME"text/plain", s::StateVec)
     bytes = Base.summarysize(s.data)
     # human-friendly units (optional)
     function _fmt(n)
-        for u in ("B","KiB","MiB","GiB")
+        for u in ("B", "KiB", "MiB", "GiB")
             if n < 1024
                 return "$(round(n, sigdigits=3)) $u"
             end
@@ -75,11 +75,20 @@ function Base.show(io::IO, ::MIME"text/plain", s::StateVec)
     end
     memstr = _fmt(bytes)
 
-    print(io,
-        "StateVec{", eltype(s.data), ",", s.q, "}",
-        "(n=", s.n,
-        ", dim=", length(s.data),
-        ", mem=", memstr, ")"
+    print(
+        io,
+        "StateVec{",
+        eltype(s.data),
+        ",",
+        s.q,
+        "}",
+        "(n=",
+        s.n,
+        ", dim=",
+        length(s.data),
+        ", mem=",
+        memstr,
+        ")",
     )
 end
 

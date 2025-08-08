@@ -11,29 +11,24 @@ function threaded_chunk_reduce(len::Integer, f::Function)
 
     # one slot per thread
     acc = Vector{Tuple{Float64,Float64}}(undef, nthr)
-    @sync for tid in 1:nthr
+    @sync for tid = 1:nthr
         Threads.@spawn begin
             istart = tdisp[tid] + 1
-            iend   = tdisp[tid] + tcnt[tid]
+            iend = tdisp[tid] + tcnt[tid]
             acc[tid] = f(istart, iend)
         end
     end
 
     # now sum all the (a,b) tuples
-    a,b = 0.0, 0.0
-    for (a₁,b₁) in acc
-        a += a₁;  b += b₁
+    a, b = 0.0, 0.0
+    for (a₁, b₁) in acc
+        a += a₁;
+        b += b₁
     end
     return a, b
 end
 
-function MC_SRE2(
-    ψ,
-    Nβ::Int,
-    Nsamples::Int,
-    seed::Union{Nothing,Int},
-    cleanup = true,
-)
+function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, cleanup = true)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
@@ -66,14 +61,7 @@ function MC_SRE2(
     return m2
 end
 
-function MC_SRE(
-    ψ,
-    q,
-    Nβ::Int,
-    Nsamples::Int,
-    seed::Union{Nothing,Int},
-    cleanup = true,
-)
+function MC_SRE(ψ, q, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}, cleanup = true)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
@@ -113,25 +101,35 @@ function SRE(ψ, q)
     XTAB, Zwhere = generate_gray_table(L, 2)
 
     # Allocate all the necessary arrays
-    TMP1   = zeros(Float64, dim)
-    TMP2   = zeros(Float64, dim)
-    Xloc1  = zeros(Float64, dim)
-    Xloc2  = zeros(Float64, dim)
+    TMP1 = zeros(Float64, dim)
+    TMP2 = zeros(Float64, dim)
+    Xloc1 = zeros(Float64, dim)
+    Xloc2 = zeros(Float64, dim)
 
     # Fill all the arrays in parallel
-    Threads.@threads for i in 1:dim
-        r  = real(ψ[i])
+    Threads.@threads for i = 1:dim
+        r = real(ψ[i])
         im = imag(ψ[i])
         Xloc1[i] = r
         Xloc2[i] = im
-        TMP1[i]  = r + im
-        TMP2[i]  = im - r
+        TMP1[i] = r + im
+        TMP2[i] = im - r
     end
 
     p2SAM, m2SAM = threaded_chunk_reduce(
         length(XTAB),
-        (i,j) -> HadaMAG._compute_chunk_SRE_v23(i, j, ψ, q, Zwhere, XTAB,
-            copy(TMP1), copy(TMP2), Xloc1, Xloc2)
+        (i, j) -> HadaMAG._compute_chunk_SRE_v23(
+            i,
+            j,
+            ψ,
+            q,
+            Zwhere,
+            XTAB,
+            copy(TMP1),
+            copy(TMP2),
+            Xloc1,
+            Xloc2,
+        ),
     )
 
     return (-log2(m2SAM/dim), abs(1-p2SAM/dim)) # TODO: should we really return 0.0 there?

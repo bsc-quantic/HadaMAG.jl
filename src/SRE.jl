@@ -689,7 +689,19 @@ _compute_chunk_SRE_v2(
     TMP2::Vector{Float64},
     Xloc1::Vector{Float64},
     Xloc2::Vector{Float64},
-) = _compute_chunk_SRE_v2(Val(q), 0, istart, iend, ψ, Zwhere, XTAB, TMP1, TMP2, Xloc1, Xloc2)
+) = _compute_chunk_SRE_v2(
+    Val(q),
+    0,
+    istart,
+    iend,
+    ψ,
+    Zwhere,
+    XTAB,
+    TMP1,
+    TMP2,
+    Xloc1,
+    Xloc2,
+)
 
 _compute_chunk_SRE_v2(
     index::Int64,
@@ -703,7 +715,19 @@ _compute_chunk_SRE_v2(
     TMP2::Vector{Float64},
     Xloc1::Vector{Float64},
     Xloc2::Vector{Float64},
-) = _compute_chunk_SRE_v2(Val(q), index, istart, iend, ψ, Zwhere, XTAB, TMP1, TMP2, Xloc1, Xloc2)
+) = _compute_chunk_SRE_v2(
+    Val(q),
+    index,
+    istart,
+    iend,
+    ψ,
+    Zwhere,
+    XTAB,
+    TMP1,
+    TMP2,
+    Xloc1,
+    Xloc2,
+)
 
 # Here we do the work unitl "for ix = istart:iend" before and then mpi
 @fastmath function _compute_chunk_SRE_v2(
@@ -834,7 +858,19 @@ _compute_chunk_SRE_v23(
     TMP2::Vector{Float64},
     Xloc1::Vector{Float64},
     Xloc2::Vector{Float64},
-) = _compute_chunk_SRE_v23(Val(q), 0, istart, iend, ψ, Zwhere, XTAB, TMP1, TMP2, Xloc1, Xloc2)
+) = _compute_chunk_SRE_v23(
+    Val(q),
+    0,
+    istart,
+    iend,
+    ψ,
+    Zwhere,
+    XTAB,
+    TMP1,
+    TMP2,
+    Xloc1,
+    Xloc2,
+)
 
 _compute_chunk_SRE_v23(
     index::Int64,
@@ -848,7 +884,19 @@ _compute_chunk_SRE_v23(
     TMP2::Vector{Float64},
     Xloc1::Vector{Float64},
     Xloc2::Vector{Float64},
-) = _compute_chunk_SRE_v23(Val(q), index, istart, iend, ψ, Zwhere, XTAB, TMP1, TMP2, Xloc1, Xloc2)
+) = _compute_chunk_SRE_v23(
+    Val(q),
+    index,
+    istart,
+    iend,
+    ψ,
+    Zwhere,
+    XTAB,
+    TMP1,
+    TMP2,
+    Xloc1,
+    Xloc2,
+)
 
 @fastmath function _compute_chunk_SRE_v23(
     ::Val{q},
@@ -868,7 +916,7 @@ _compute_chunk_SRE_v23(
 
     p2SAM = mSAM = 0.0
 
-    L   = qubits(ψ)
+    L = qubits(ψ)
     dim = 1<<L
     inVR = zeros(Float64, dim)
 
@@ -878,7 +926,7 @@ _compute_chunk_SRE_v23(
 
         if ix == istart
             # initial setup (step 0 of Gray code): apply all bits in XTAB[istart]
-            for site in 0:(L-1)
+            for site = 0:(L-1)
                 if ((XTAB[istart] >> site) & 0x1) == 1
                     anypassed = true
                     # swap+blend for that site
@@ -901,7 +949,7 @@ _compute_chunk_SRE_v23(
         # --- now do the big transform + reduction
         call_fht!(inVR, Int32(L))
 
-        @inbounds @simd for r in 1:dim
+        @inbounds @simd for r = 1:dim
             pnorm = inVR[r] ^ 2
             p2SAM += pnorm
             mSAM += pnorm ^ q
@@ -929,7 +977,7 @@ end
 
     p2SAM = m2SAM = 0.0
 
-    L   = qubits(ψ)
+    L = qubits(ψ)
     dim = 1<<L
     inVR = zeros(Float64, dim)
 
@@ -940,7 +988,7 @@ end
         anypassed = false
         if ix == istart
             # --- initial setup (step 0 of Gray code): apply all bits in XTAB[istart]
-            for site in 0:(L-1)
+            for site = 0:(L-1)
                 if ((XTAB[istart] >> site) & 0x1) == 1
                     anypassed = true
                     # swap+blend for that site
@@ -962,7 +1010,7 @@ end
 
         @inline call_fht!(inVR, Int32(L))
 
-        @inbounds @simd for r in 1:dim
+        @inbounds @simd for r = 1:dim
             pnorm = inVR[r] ^ 2
             p2SAM += pnorm
             m2SAM += pnorm ^ 2
@@ -986,29 +1034,36 @@ Executes exactly `dim/2` iterations (no branches), computing each pair of indice
 on the fly so that the loop is fully SIMD-vectorizable.
 """
 @inline @fastmath function flip_and_update!(
-    site::Int, dim::Int,
-    TMP1::AbstractVector{T}, TMP2::AbstractVector{T},
-    X1::AbstractVector{T},  X2::AbstractVector{T},
-    inVR::AbstractVector{T}
+    site::Int,
+    dim::Int,
+    TMP1::AbstractVector{T},
+    TMP2::AbstractVector{T},
+    X1::AbstractVector{T},
+    X2::AbstractVector{T},
+    inVR::AbstractVector{T},
 ) where {T<:AbstractFloat}
-    stride     = 1 << site
-    period2    = stride << 1
+    stride = 1 << site
+    period2 = stride << 1
     half_pairs = dim >>> 1
 
-    @inbounds @simd for k in 0:(half_pairs-1)
+    @inbounds @simd for k = 0:(half_pairs-1)
         # compute indices
-        block  = k >>> site
+        block = k >>> site
         offset = k & (stride - 1)
-        base   = block * period2
-        i      = base + offset + 1
-        j      = i + stride
+        base = block * period2
+        i = base + offset + 1
+        j = i + stride
 
         # swap in TMP1/TMP2
-        t1i = TMP1[i]; t1j = TMP1[j]
-        TMP1[i] = t1j; TMP1[j] = t1i
+        t1i = TMP1[i];
+        t1j = TMP1[j]
+        TMP1[i] = t1j;
+        TMP1[j] = t1i
 
-        t2i = TMP2[i]; t2j = TMP2[j]
-        TMP2[i] = t2j; TMP2[j] = t2i
+        t2i = TMP2[i];
+        t2j = TMP2[j]
+        TMP2[i] = t2j;
+        TMP2[j] = t2i
 
         # fused multiply‐add update
         inVR[i] = muladd(X1[i], t1j, X2[i] * t2j)
@@ -1071,14 +1126,14 @@ function naive_SRE2(ψ::Vector{ComplexF64})
 
     acc = 0.0
     # loop over all 4^n Pauli strings
-    Threads.@threads for idx in 0:(4^n - 1)
+    Threads.@threads for idx = 0:(4^n-1)
         # decode idx into base‐4 “digits” p[1],…,p[n] in {0,1,2,3}
         tmp = idx
-        P = Paulis[(tmp % 4) + 1]
+        P = Paulis[(tmp%4)+1]
         tmp ÷= 4
         # build the full n‐qubit operator P = P₁ ⊗ P₂ ⊗ … ⊗ Pₙ
-        for _ in 2:n
-            P = kron(P, Paulis[(tmp % 4) + 1])
+        for _ = 2:n
+            P = kron(P, Paulis[(tmp%4)+1])
             tmp ÷= 4
         end
         # expectation value ⟨ψ|P|ψ⟩ is real for Hermitian P (up to numerical noise)
@@ -1109,12 +1164,13 @@ function naive_SRE(ψ::Vector{Complex{T}}, k::Integer) where {T<:Real}
 
     acc = 0.0
     # loop over all 4^n Pauli strings
-    for idx in 0:(4^n - 1)
+    for idx = 0:(4^n-1)
         tmp = idx
         # build P = P₁⊗…⊗Pₙ by decoding idx in base-4
-        P = Paulis[(tmp % 4) + 1];  tmp ÷= 4
-        for _ in 2:n
-            P = kron(P, Paulis[(tmp % 4) + 1])
+        P = Paulis[(tmp%4)+1];
+        tmp ÷= 4
+        for _ = 2:n
+            P = kron(P, Paulis[(tmp%4)+1])
             tmp ÷= 4
         end
 

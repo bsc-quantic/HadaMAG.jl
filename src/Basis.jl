@@ -61,33 +61,32 @@ code_off::Int
     N = UInt64(1) << n   # global length = 2^n
 
     # ── inline block‐2 partitioning for [0, N) ───────────────────────────────
-    q, r     = divrem(Int(N), P)               # q = ⌊N/P⌋, r = N mod P
+    q, r = divrem(Int(N), P)               # q = ⌊N/P⌋, r = N mod P
     code_off = UInt64(rank*q + min(rank, r))   # start idx
     code_cnt = q + (rank < r ? 1 : 0)          # count
 
     # ── inline block‐2 partitioning for [0, N-1) (the flips) ────────────────
-    Nf       = Int(N) - 1
-    qf, rf   = divrem(Nf, P)
+    Nf = Int(N) - 1
+    qf, rf = divrem(Nf, P)
     flip_off = UInt64(rank*qf + min(rank, rf))
     flip_cnt = qf + (rank < rf ? 1 : 0)
 
     # ── pre‐allocate exactly what we need ────────────────────────────────────
     local_codes = Vector{UInt64}(undef, code_cnt)
-    local_flips = Vector{Int}(undef,    flip_cnt)
+    local_flips = Vector{Int}(undef, flip_cnt)
 
     # ── 1) build Gray codes ─────────────────────────────────────────────────
-    @inbounds @simd for j in 1:code_cnt
+    @inbounds @simd for j = 1:code_cnt
         let i = code_off + (j - 1)
             local_codes[j] = i ⊻ (i >> 1)
         end
     end
 
     # ── 2) build flip‐positions ─────────────────────────────────────────────
-    @inbounds @simd for j in 1:flip_cnt
+    @inbounds @simd for j = 1:flip_cnt
         let k = flip_off + (j - 1)
             # exactly trailing_zeros( gray(k) ⊻ gray(k+1) ) + 1
-            local_flips[j] = trailing_zeros((k ⊻ (k >> 1))
-                                        ⊻ ((k+1) ⊻ ((k+1) >> 1))) + 1
+            local_flips[j] = trailing_zeros((k ⊻ (k >> 1)) ⊻ ((k+1) ⊻ ((k+1) >> 1))) + 1
         end
     end
 

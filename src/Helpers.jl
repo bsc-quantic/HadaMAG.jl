@@ -17,8 +17,8 @@ end
 # This function partitions an integer `n` into `P` parts, returning the counts and displacements.
 function partition_counts(n::Integer, P::Integer)
     base, rem = divrem(n, P)
-    counts = [i ≤ rem ? base+1 : base for i in 1:P]
-    displs = cumsum((0, counts[1:end-1]...))
+    counts = [i ≤ rem ? base+1 : base for i = 1:P]
+    displs = cumsum((0, counts[1:(end-1)]...))
     return counts, displs
 end
 
@@ -28,10 +28,14 @@ const _fht_fn = Ref{Function}()
 const _default_fht_fn = Ref{Function}()
 
 # Initialize the default function pointer to the JLL library function
-_default_fht_fn[] = (vec, L) -> ccall(
-    (:fht_double, FastHadamardStructuredTransforms_jll.libfasttransforms),
-    Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L
-)
+_default_fht_fn[] =
+    (vec, L) -> ccall(
+        (:fht_double, FastHadamardStructuredTransforms_jll.libfasttransforms),
+        Cvoid,
+        (Ptr{Cdouble}, Cint),
+        pointer(vec),
+        L,
+    )
 
 _fht_fn[] = _default_fht_fn[]
 
@@ -44,13 +48,10 @@ After calling this, every `call_fht!` will invoke your library instead of the JL
 """
 function use_fht_lib(path::String)
     handle = dlopen(path, Libdl.RTLD_LAZY | Libdl.RTLD_DEEPBIND)
-    ptr    = dlsym(handle, :fht_double)
+    ptr = dlsym(handle, :fht_double)
     @assert ptr != C_NULL "couldn't find symbol :fht_double in $path"
     @info "Using custom FHT library at $path"
-    _fht_fn[] = (vec, L) -> ccall(
-        ptr,
-        Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L
-    )
+    _fht_fn[] = (vec, L) -> ccall(ptr, Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L)
     nothing
 end
 

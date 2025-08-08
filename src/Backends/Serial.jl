@@ -5,13 +5,7 @@ using HadaMAG
 
 # This module provides the low-level kernels for the Serial backend.
 
-function MC_SRE2(
-    ψ,
-    Nβ::Int,
-    Nsamples::Int,
-    seed::Union{Nothing,Int};
-    cleanup = true,
-)
+function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup = true)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
@@ -44,14 +38,7 @@ function MC_SRE2(
     return m2
 end
 
-function MC_SRE(
-    ψ,
-    q,
-    Nβ::Int,
-    Nsamples::Int,
-    seed::Union{Nothing,Int};
-    cleanup = true,
-)
+function MC_SRE(ψ, q, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup = true)
     # Set a random seed
     seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
     tmpdir = mktempdir()
