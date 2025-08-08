@@ -11,7 +11,7 @@ export StateVec,
 
 include("Backends/Dispatch.jl")
 
-include("SRE2.jl")
+include("SRE.jl")
 export MC_SRE2, SRE2, mana_SRE2
 
 end

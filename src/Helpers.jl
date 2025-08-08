@@ -14,6 +14,66 @@ function _power_q(len::Integer, q::Integer)
     return n, tmp == 1
 end
 
+# This function partitions an integer `n` into `P` parts, returning the counts and displacements.
+function partition_counts(n::Integer, P::Integer)
+    base, rem = divrem(n, P)
+    counts = [i ≤ rem ? base+1 : base for i in 1:P]
+    displs = cumsum((0, counts[1:end-1]...))
+    return counts, displs
+end
+
+
+# Two Ref containers to hold the function pointer and the default function
+const _fht_fn = Ref{Function}()
+const _default_fht_fn = Ref{Function}()
+
+# Initialize the default function pointer to the JLL library function
+_default_fht_fn[] = (vec, L) -> ccall(
+    (:fht_double, FastHadamardStructuredTransforms_jll.libfasttransforms),
+    Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L
+)
+
+_fht_fn[] = _default_fht_fn[]
+
+
+"""
+    use_fht_lib(path::String)
+
+Point at your own compiled `.so` that exports exactly the symbol `:fht_double`.
+After calling this, every `call_fht!` will invoke your library instead of the JLL one.
+"""
+function use_fht_lib(path::String)
+    handle = dlopen(path, Libdl.RTLD_LAZY | Libdl.RTLD_DEEPBIND)
+    ptr    = dlsym(handle, :fht_double)
+    @assert ptr != C_NULL "couldn't find symbol :fht_double in $path"
+    @info "Using custom FHT library at $path"
+    _fht_fn[] = (vec, L) -> ccall(
+        ptr,
+        Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L
+    )
+    nothing
+end
+
+"""
+    use_default_fht()
+
+Revert `call_fht!` back to the built-in `FastHadamardStructuredTransforms_jll` implementation.
+"""
+function use_default_fht()
+    @info "Reverting to default FHT library"
+    _fht_fn[] = _default_fht_fn[]
+    nothing
+end
+
+"""
+    call_fht!(vec::Vector{Float64}, L::Int32)
+
+In‐place fast Hadamard transform.  After an optional call to `use_fht_lib`,
+this will call through your `.so` instead of the default JLL library.
+"""
+call_fht!(vec::Vector{Float64}, L::Int32) = (_fht_fn[])(vec, L)
+
+
 """
     haar_random_unitary(n_qubits::Integer, rng::AbstractRNG = Random.GLOBAL_RNG)
 
@@ -107,4 +167,61 @@ function integrate_simpson(x::AbstractVector, y::AbstractVector)
     # I = h/3 * [y₀ + yₙ + 4*(y₁ + y₃ + ... + yₙ₋₁) + 2*(y₂ + y₄ + ... + yₙ₋₂)]
     integral = h/3 * (y[1] + y[end] + 4 * sum(y[2:2:(end-1)]) + 2 * sum(y[3:2:(end-2)]))
     return integral
+end
+
+"""
+    fast_hadamard_qutrit!(ψ::AbstractVector{Complex{T}}) where T<:Real
+
+In‐place generalized Hadamard (H₃) on each of the log₃(length(ψ)) qutrits
+encoded in the state‐vector `ψ`.  After calling, ψ → (H₃ ⊗ H₃ ⊗ …)·ψ.
+
+Throws if `length(ψ)` isn’t exactly 3ⁿ for some integer n.
+"""
+
+const ωr = -0.5 # = cos(2π/3)
+const ωi = √3/2 # = sin(2π/3)
+
+@fastmath function fast_hadamard_qutrit!(
+    ψ::AbstractVector{Complex{T}},
+) where {T<:AbstractFloat}
+    N = length(ψ)
+    n = Int(round(log(N)/log(3)))
+    # N == 3^n || throw(ArgumentError("length(ψ) = $N is not a power of 3"))
+
+    step = 1
+    while step < N
+        jump = 3*step
+        @inbounds for i = 1:jump:N
+            @simd for j = 0:(step-1)
+                idx = i+j
+                a = ψ[idx];
+                ar, ai = real(a), imag(a)
+                b = ψ[idx+step];
+                br, bi = real(b), imag(b)
+                c = ψ[idx+2*step];
+                cr, ci = real(c), imag(c)
+
+                # compute a + b + c
+                r0 = ar + br + cr
+                i0 = ai + bi + ci
+
+                # compute a + ω b + ω² c
+                #    real: ar + ωr*br − ωi*bi + ωr*cr + ωi*ci
+                # imaginary: ai + ωr*bi + ωi*br + ωr*ci − ωi*cr
+                r1 = ar + ωr*(br + cr) - ωi*(bi - ci)
+                i1 = ai + ωr*(bi + ci) + ωi*(br - cr)
+
+                # compute a + ω² b + ω c
+                #    ω² = ωr - i ωi
+                r2 = ar + ωr*(br + cr) + ωi*(bi - ci)
+                i2 = ai + ωr*(bi + ci) - ωi*(br - cr)
+
+                ψ[idx] = Complex(r0, i0)
+                ψ[idx+step] = Complex(r1, i1)
+                ψ[idx+2*step] = Complex(r2, i2)
+            end
+        end
+        step = jump
+    end
+    return ψ
 end

@@ -115,7 +115,7 @@ function _compute_MC_SRE2_β(
     sum_p = 0.0
     sum_p2 = 0.0
     n_p = 0
-    currPROB = 1e-120
+    currPROB = -Inf
     currM2 = 0.0
     currX = UInt64(0)
 
@@ -127,14 +127,20 @@ function _compute_MC_SRE2_β(
         r = rs[idx] # pre‐drawn uniform
         tr = tries[idx] # 1…9
 
-        # generate tr random numbers of qubits to flip
-        whereA_vec = rand(rng, 1:L, tr)
+        # # generate tr random numbers of qubits to flip
+        # whereA_vec = rand(rng, 1:L, tr)
 
-        # CHECK: foldl is better?
-        # build the XOR-mask by folding the table entries
-        # mask_acc   = foldl(⊻, MASK_TABLE[whereA_vec]; init = zero(UInt64))
+        # # CHECK: foldl is better?
+        # # build the XOR-mask by folding the table entries
+        # # mask_acc   = foldl(⊻, MASK_TABLE[whereA_vec]; init = zero(UInt64))
+        # mask_acc = zero(UInt64)
+        # @inbounds for w in whereA_vec
+        #     mask_acc ⊻= MASK_TABLE[w]
+        # end
+
         mask_acc = zero(UInt64)
-        @inbounds for w in whereA_vec
+        @inbounds @simd for _ = 1:tr
+            w = rand(rng, 1:L)          # single Int draw
             mask_acc ⊻= MASK_TABLE[w]
         end
 
@@ -198,8 +204,8 @@ function _compute_MC_SRE_β(
     dist = Uniform(0.0, 1.0)
     vq = Val(q) # Value type for q, used for method dispatch
 
-    tmp1 = zeros(Float64, dim)
-    tmp2 = zeros(Float64, dim)
+    tmp1 = Vector{Float64}(undef, dim)
+    tmp2 = Vector{Float64}(undef, dim)
 
     @inline compute_TMP!(tmp1, tmp2, data(ψ))
 
@@ -486,56 +492,6 @@ Compute the tmp1 and tmp2 vectors in-place using SIMD operations. tmp1 = real(X)
     end
     return nothing
 end
-
-# Two Ref containers to hold the function pointer and the default function
-const _fht_fn = Ref{Function}()
-const _default_fht_fn = Ref{Function}()
-
-# Initialize the default function pointer to the JLL library function
-_default_fht_fn[] = (vec, L) -> ccall(
-    (:fht_double, FastHadamardStructuredTransforms_jll.libfasttransforms),
-    Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L
-)
-
-_fht_fn[] = _default_fht_fn[]
-
-
-"""
-    use_fht_lib(path::String)
-
-Point at your own compiled `.so` that exports exactly the symbol `:fht_double`.
-After calling this, every `call_fht!` will invoke your library instead of the JLL one.
-"""
-function use_fht_lib(path::String)
-    handle = dlopen(path, Libdl.RTLD_LAZY | Libdl.RTLD_DEEPBIND)
-    ptr    = dlsym(handle, :fht_double)
-    @assert ptr != C_NULL "couldn't find symbol :fht_double in $path"
-    @info "Using custom FHT library at $path"
-    _fht_fn[] = (vec, L) -> ccall(
-        ptr,
-        Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L
-    )
-    nothing
-end
-
-"""
-    use_default_fht()
-
-Revert `call_fht!` back to the built-in `FastHadamardStructuredTransforms_jll` implementation.
-"""
-function use_default_fht()
-    @info "Reverting to default FHT library"
-    _fht_fn[] = _default_fht_fn[]
-    nothing
-end
-
-"""
-    call_fht!(vec::Vector{Float64}, L::Int32)
-
-In‐place fast Hadamard transform.  After an optional call to `use_fht_lib`,
-this will call through your `.so` instead of the default JLL library.
-"""
-call_fht!(vec::Vector{Float64}, L::Int32) = (_fht_fn[])(vec, L)
 
 # TODO: add a comment or fix the description here
 # inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
