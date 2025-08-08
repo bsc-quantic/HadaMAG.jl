@@ -43,10 +43,3 @@ _apply_backend(::MPIThreads, fsym, args...; kw...) =
     else
         throw(ArgumentError("MPI backend unavailable – `using MPI` first"))
     end
-
-# _apply_backend(::MPIThreads, fsym, args...; kw...) =
-#     if isdefined(HadaMAG, :ThreadedBackend)
-#         getfield(HadaMAG.ThreadedBackend, fsym)(args...; kw...)
-#     else
-#         throw(ArgumentError("MPI backend unavailable – `using MPI` first"))
-#     end
