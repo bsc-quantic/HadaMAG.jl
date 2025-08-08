@@ -4,7 +4,7 @@ using Test
 @testset "Unit tests" begin
     include("Basis_test.jl")
     include("State_test.jl")
-    include("SRE2_test.jl")
+    include("SRE_test.jl")
 end
 
 @testset "Integration tests" begin

@@ -23,6 +23,70 @@
 
         # invalid base should throw
         @test_throws AssertionError generate_gray_table(3, 1)
+
+        @testset "Splitted code" begin
+            # Test that concatenating the results of `generate_binary_splitted`
+            # for all ranks gives the same result as `generate_binary`
+
+            # run tests for a variety of n and P
+            for n in 2:6, P in 1:5
+                # reference full table
+                codes_ref, flips_ref = generate_gray_table(n, 2)
+
+                # collect all MPI‑local pieces
+                all_codes = UInt64[]
+                all_flips = Int[]
+
+                for rank in 0:P-1
+                    xtab, zwhere, code_off, flip_off =
+                    HadaMAG.generate_binary_splitted(n, rank, P)
+                                        append!(all_codes, xtab)
+                    append!(all_flips, zwhere)
+
+                    # test the code‐offset against the codes partition
+                    N = Int(1) << n
+                    code_counts, code_displs = HadaMAG.partition_counts(N,    P)
+                    flip_counts, flip_displs = HadaMAG.partition_counts(N-1,  P)
+
+                    @test code_off == code_displs[rank+1]
+                    @test flip_off == flip_displs[rank+1]
+                end
+
+                @test all_codes == codes_ref
+                @test all_flips == flips_ref
+            end
+        end
+
+        @testset "Splitted code" begin
+            for n in 2:6, P in 1:5
+                # reference full table
+                codes_ref, flips_ref = generate_gray_table(n, 2)
+
+                all_codes = UInt64[]
+                all_flips = Int[]
+
+                for rank in 0:P-1
+                    # now returns (xtab, zwhere, code_off, flip_off)
+                    xtab, zwhere, code_off, flip_off =
+                        HadaMAG.generate_binary_splitted(n, rank, P)
+
+                    append!(all_codes, xtab)
+                    append!(all_flips, zwhere)
+
+                    # test the code‐offset against the codes partition
+                    N = Int(1) << n # 2^n
+                    code_counts, code_displs = HadaMAG.partition_counts(N,    P)
+                    flip_counts, flip_displs = HadaMAG.partition_counts(N-1,  P)
+
+                    @test code_off == code_displs[rank+1]
+                    @test flip_off == flip_displs[rank+1]
+                end
+
+                @test all_codes == codes_ref
+                @test all_flips == flips_ref
+            end
+        end
+
     end
 
     @testset "General q-code" begin

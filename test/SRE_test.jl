@@ -13,14 +13,14 @@ using Statistics
 
         @testset "SerialBackend" begin
             # test that we get the same results with same seed
-            m2_serial = MC_SRE2(ψ; backend = :serial, seed = 123, Nsamples, Nβ)
-            @test MC_SRE2(ψ; backend = :serial, seed = 123, Nsamples, Nβ) ≈ m2_serial
+            m2_serial = MC_SRE(ψ, 2; backend = :serial, seed = 123, Nsamples, Nβ)
+            @test MC_SRE(ψ, 2; backend = :serial, seed = 123, Nsamples, Nβ) ≈ m2_serial
         end
 
         @testset "ThreadedBackend" begin
             # test that we get the same results with same seed
-            m2_threads = MC_SRE2(ψ; backend = :threads, seed = 123, Nsamples, Nβ)
-            @test MC_SRE2(ψ; backend = :threads, seed = 123, Nsamples, Nβ) ≈ m2_threads
+            m2_threads = MC_SRE(ψ, 2; backend = :threads, seed = 123, Nsamples, Nβ)
+            @test MC_SRE(ψ, 2; backend = :threads, seed = 123, Nsamples, Nβ) ≈ m2_threads
         end
 
         # Compare the results from both backends
@@ -28,8 +28,8 @@ using Statistics
     end
 
     @testset "Exact SRE2" begin
-        m2_exact_serial, _ = SRE2(ψ; backend = :serial)
-        m2_exact_threads, _ = SRE2(ψ; backend = :threads)
+        m2_exact_serial, lost_norm_serial = SRE(ψ, 2; backend = :serial)
+        m2_exact_threads, lost_norm_threads = SRE(ψ, 2; backend = :threads)
 
         # test that we get the same results with both backends
         @test m2_exact_serial ≈ m2_exact_threads
@@ -46,14 +46,14 @@ using Statistics
         reps = 100 # number of independent seeds
         diffs = zeros(reps)
 
-        m2_exact, _ = SRE2(ψ; backend = :threads)
+        m2_exact, _ = SRE(ψ, 2; backend = :threads)
 
         diff_last = Inf
         for Nsamples in Nsamples_list
-            for r in 1:reps
-                seed = rand(1:2^30)  # pick a fresh seed
+            for r = 1:reps
+                seed = rand(1:(2^30))  # pick a fresh seed
                 Random.seed!(seed)
-                m2_mc = MC_SRE2(ψ; backend = :threads, Nsamples, Nβ = 25, seed = seed)
+                m2_mc = MC_SRE(ψ, 2; backend = :threads, Nsamples, Nβ = 25, seed = seed)
                 diffs[r] = abs(m2_mc - m2_exact)
             end
 

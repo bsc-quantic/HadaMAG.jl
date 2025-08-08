@@ -98,7 +98,7 @@ function _compute_MC_SRE2_β(
     # create arrays of real doubles that will store real and impaginary part of the state across the grays code
     inVR = zeros(Float64, dim)
 
-    @inline pnorm, mval, m3val = sample_SRE2(L, data(ψ), tmp1, tmp2, inVR)
+    @inline pnorm, mval = sample_SRE2(L, data(ψ), tmp1, tmp2, inVR)
 
     # Batch RNG & tries outside the loop for performance
     randvals = rand(rng, dist, Nsamples)
@@ -307,7 +307,7 @@ end
     # Perform Fast Hadamard Transform
     call_fht!(inVR, Int32(L))
 
-    @inline psam, m2sam = compute_moments(inVR)
+    @inline psam, m2sam = compute_moments(inVR, Val(2))
 
     return psam / 2^L, m2sam
 end
