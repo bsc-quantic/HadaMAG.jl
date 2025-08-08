@@ -13,7 +13,7 @@ bit position that flipped going from `codes[k]` → `codes[k+1]`.
 """
 function generate_binary(n::Integer)
     # total codes
-    N = UInt64(1) << n
+    N = UInt64(1) << n # 2^n
 
     # build all Gray codes in one go via comprehension
     codes = [i ⊻ (i >> 1) for i = UInt64(0):(N-1)]
@@ -25,6 +25,75 @@ function generate_binary(n::Integer)
 
     return codes, flips
 end
+
+"""
+    generate_binary_splitted(n::Integer, rank::Integer, P::Integer)
+      → (local_codes::Vector{UInt64},
+         local_flips::Vector{Int},
+         code_off::Int,
+         flip_off::Int)
+
+Partition the global Gray‑code sequence of length 2^n into P contiguous chunks,
+and return just the slice for `rank` (0‑based).  You get back both the local
+Gray codes and the local “flip” indices, _plus_ the two offsets into the global
+arrays.
+
+# Arguments
+- `n::Integer`
+  Number of bits.  The full sequence has length `2^n`.
+- `rank::Integer`
+  Which slice you want, in `0:(P-1)`.
+- `P::Integer`
+  Total number of partitions (MPI size).
+
+# Returns
+1. `local_codes::Vector{UInt64}`
+   Gray codes for global indices
+2. local_flips::Vector{Int}
+    Flip indices for global indices
+code_off::Int
+    0‑based starting index into the full Gray‑code array.
+3. flip_off::Int
+    0‑based starting index into the full flip‑array.
+"""
+@fastmath function generate_binary_splitted(n::Int, rank::Int, P::Int)
+    @assert 0 ≤ rank < P
+    N = UInt64(1) << n   # global length = 2^n
+
+    # ── inline block‐2 partitioning for [0, N) ───────────────────────────────
+    q, r     = divrem(Int(N), P)               # q = ⌊N/P⌋, r = N mod P
+    code_off = UInt64(rank*q + min(rank, r))   # start idx
+    code_cnt = q + (rank < r ? 1 : 0)          # count
+
+    # ── inline block‐2 partitioning for [0, N-1) (the flips) ────────────────
+    Nf       = Int(N) - 1
+    qf, rf   = divrem(Nf, P)
+    flip_off = UInt64(rank*qf + min(rank, rf))
+    flip_cnt = qf + (rank < rf ? 1 : 0)
+
+    # ── pre‐allocate exactly what we need ────────────────────────────────────
+    local_codes = Vector{UInt64}(undef, code_cnt)
+    local_flips = Vector{Int}(undef,    flip_cnt)
+
+    # ── 1) build Gray codes ─────────────────────────────────────────────────
+    @inbounds @simd for j in 1:code_cnt
+        let i = code_off + (j - 1)
+            local_codes[j] = i ⊻ (i >> 1)
+        end
+    end
+
+    # ── 2) build flip‐positions ─────────────────────────────────────────────
+    @inbounds @simd for j in 1:flip_cnt
+        let k = flip_off + (j - 1)
+            # exactly trailing_zeros( gray(k) ⊻ gray(k+1) ) + 1
+            local_flips[j] = trailing_zeros((k ⊻ (k >> 1))
+                                        ⊻ ((k+1) ⊻ ((k+1) >> 1))) + 1
+        end
+    end
+
+    return local_codes, local_flips, Int(code_off), Int(flip_off)
+end
+
 
 """
     integer_to_gray(val, q, n) -> gray::Vector{Int}
