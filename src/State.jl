@@ -63,17 +63,25 @@ LinearAlgebra.normalize(s::StateVec) = normalize(s.data)
 
 # Pretty-print summary in the REPL
 function Base.show(io::IO, ::MIME"text/plain", s::StateVec)
-    print(
-        io,
-        "StateVec{",
-        eltype(s.data),
-        ",",
-        s.q,
-        "}(n=",
-        s.n,
-        ", dim=",
-        length(s.data),
-        ")",
+    # total bytes of the buffer (including any GC-allocated overhead)
+    bytes = Base.summarysize(s.data)
+    # human-friendly units (optional)
+    function _fmt(n)
+        for u in ("B","KiB","MiB","GiB")
+            if n < 1024
+                return "$(round(n, sigdigits=3)) $u"
+            end
+            n /= 1024
+        end
+        return "$(round(n, sigdigits=3)) TiB"
+    end
+    memstr = _fmt(bytes)
+
+    print(io,
+        "StateVec{", eltype(s.data), ",", s.q, "}",
+        "(n=", s.n,
+        ", dim=", length(s.data),
+        ", mem=", memstr, ")"
     )
 end
 
@@ -98,6 +106,68 @@ function rand_haar(n::Int; depth, rng::AbstractRNG = Random.GLOBAL_RNG)
     apply_brick_wall_haar!(vec, n, depth, rng)
 
     return StateVec(vec; q = 2)
+end
+
+function rand_cliff(n::Int; depth::Int = 1, rng::AbstractRNG = Random.GLOBAL_RNG)
+    """
+    Generate a random Clifford circuit on `n` qubits with `depth` layers.
+    Each layer consists of Haar-random 2-qubit gates applied in a brick-wall pattern.
+    """
+    state = zeros(ComplexF64, 2^n)
+    state[1] = 1.0  # Initialize to |0...0⟩ state
+
+    apply_brick_wall_cliff!(state, n, depth, rng)
+
+    return StateVec(state; q = 2)
+end
+
+function apply_brick_wall_cliff!(
+    state::AbstractVector{ComplexF64},
+    nqubits::Integer,
+    depth::Integer,
+    rng::AbstractRNG = Random.GLOBAL_RNG,
+)
+    """
+    Apply a brick-wall pattern of Clifford gates to `state`.
+    The circuit has `depth` layers; odd layers act on qubits (1,2),(3,4)…, even on (2,3),(4,5)…
+    """
+    @assert length(state) == (1 << nqubits) "apply_brick_wall_cliff only supports qubit state vectors of length 2^n"
+
+    # 1qubit gates
+    one_gates = [
+        [1.0 0.0; 0.0 1.0],  # I
+        [0.0 1.0; 1.0 0.0],  # X
+        [0.0 -im; im 0.0],   # Y
+        [1.0 0.0; 0.0 -1.0], # Z
+        [1.0 0.0; 0.0 1.0],  # H
+        [1.0 0.0; 0.0 1*im], # S
+    ]
+
+    cnot = [
+        1.0 0.0 0.0 0.0;
+        0.0 1.0 0.0 0.0;
+        0.0 0.0 0.0 1.0;
+        0.0 0.0 1.0 0.0; # CNOT
+    ]
+
+    # 2qubit gates (cnot)
+    two_gates = [cnot]
+
+    gates = vcat(one_gates, two_gates)
+
+    for layer = 1:depth
+        # choose starting qubit: 1→(1,2),(3,4)… ; 2→(2,3),(4,5)…
+        start = isodd(layer) ? 1 : 2
+        for q = start:2:(nqubits-1)
+            gate = rand(rng, gates)
+            if size(gate) == (2, 2)
+                # convert to 4x4 gate for 2-qubit application
+                gate = kron(gate, [1.0 0.0; 0.0 1.0]) # tensor product with identity
+            end
+            apply_2gate!(state, gate, q, q+1)
+        end
+    end
+    return state
 end
 
 """
