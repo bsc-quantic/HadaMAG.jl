@@ -252,8 +252,9 @@ end
 end
 
 # The refactored MC_quantity:
-function MC_SRE2_test(
+function MC_SRE(
     ψ,
+    q,
     Nβ::Int,
     Nsamples::Int;
     seed::Union{Nothing,Int} = nothing,
@@ -282,8 +283,9 @@ function MC_SRE2_test(
         # each rank writes its chunk of files
         for (local_i, β) in enumerate(β_vals)
             global_idx = idx_range[1] + local_i - 1
-            HadaMAG._compute_MC_SRE2_β(
+            HadaMAG._compute_MC_SRE_β(
                 ψ,
+                q,
                 Nsamples,
                 seed + global_idx,
                 β,
