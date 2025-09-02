@@ -255,8 +255,8 @@ function MC_SRE(
     ψ,
     q,
     Nβ::Int,
-    Nsamples::Int;
-    seed::Union{Nothing,Int} = nothing,
+    Nsamples::Int,
+    seed::Union{Nothing,Int};
     cleanup::Bool = true,
 )
 
@@ -306,7 +306,6 @@ function MC_SRE(
             m2 = -log2(2^(-I_res) + I_m2ADD)
         end
 
-        return m2
     finally
         if rank == 0 # Rank 0 cleans up the temporary directory
             if cleanup
@@ -319,8 +318,10 @@ function MC_SRE(
 
     MPI.Barrier(comm)
 
-    # broadcast the final scalar back to all ranks
-    return MPI.Bcast(rank == 0 ? value : zero(value), 0, comm)
+    # broadcast the final result m2 to all ranks
+    m2 = MPI.Bcast(m2, 0, comm)
+
+    return m2
 end
 
 function mana_SRE2(ψ)
