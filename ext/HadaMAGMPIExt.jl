@@ -110,8 +110,7 @@ function MC_SRE2(
     ψ,
     Nβ::Int,
     Nsamples::Int,
-    seed::Union{Nothing,Int},
-    sample;
+    seed::Union{Nothing,Int};
     cleanup = true,
 )
     # TODO: create a macro for this mpi rank assignment
@@ -128,7 +127,7 @@ function MC_SRE2(
     tmpdir = MPI.bcast(tmpdir, 0, comm)
 
     beta_val(i) = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
-    counts, displs = partition_counts(Nβ, mpisize)
+    counts, displs = HadaMAG.partition_counts(Nβ, mpisize)
     r = rank + 1 # 1-based for arrays
     start = displs[r] + 1
     stop = displs[r] + counts[r]
@@ -144,7 +143,7 @@ function MC_SRE2(
             # convert beta value to j
             idx = (β * (Nβ - 1) |> round |> Int) + 1
 
-            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir, sample)
+            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir)
         end
 
         MPI.Barrier(MPI.COMM_WORLD)
@@ -258,7 +257,6 @@ function MC_SRE(
     Nβ::Int,
     Nsamples::Int;
     seed::Union{Nothing,Int} = nothing,
-    sample,
     cleanup::Bool = true,
 )
 
@@ -266,8 +264,9 @@ function MC_SRE(
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
 
-    # pick or generate a seed once, on every rank
-    seed = seed === nothing ? rand(1:(10^9)) : seed
+    # Set a random seed (only on rank 0), then broadcast to all ranks
+    seed = rank == 0 ? seed === nothing ? rand(1:(10^9)) : seed : 0
+    seed = MPI.Bcast(seed, 0, comm)
 
     # Create a temporary directory for storing results
     tmpdir = rank == 0 ? mktempdir() : nothing
@@ -291,7 +290,6 @@ function MC_SRE(
                 β,
                 global_idx,
                 tmpdir,
-                sample,
             )
         end
 
