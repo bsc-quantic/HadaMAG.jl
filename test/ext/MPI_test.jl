@@ -1,9 +1,12 @@
 @testset "MPI" begin
     using MPI
+    using Random
 
     @testset "SRE2" begin
         L = 14
         depth = 4
+
+        Random.seed!(1234)
         ψ = rand_haar(L; depth)
 
         @testset "Monte Carlo SRE2" begin
