@@ -14,7 +14,7 @@ using Statistics
         @testset "SerialBackend" begin
             # test that we get the same results with same seed
             m2_serial =
-                MC_SRE(ψ, 2; backend = :serial, seed = 123, Nsamples, Nβ, progress = false)
+                MC_SRE(ψ, 2; backend = :serial, seed = 123, Nsamples, Nβ, progress = true)
             @test MC_SRE(
                 ψ,
                 2;
@@ -29,7 +29,7 @@ using Statistics
         @testset "ThreadedBackend" begin
             # test that we get the same results with same seed
             m2_threads =
-                MC_SRE(ψ, 2; backend = :threads, seed = 123, Nsamples, Nβ, progress = false)
+                MC_SRE(ψ, 2; backend = :threads, seed = 123, Nsamples, Nβ, progress = true)
             @test MC_SRE(
                 ψ,
                 2;
