@@ -55,6 +55,9 @@ Base.isequal(s1::StateVec, s2::StateVec) = isequal(s1.data, s2.data) && s1.q == 
 Base.isapprox(s1::StateVec, s2::StateVec; atol = 1e-8) =
     isapprox(s1.data, s2.data; atol = atol) && s1.q == s2.q
 
+Base.getindex(s::StateVec, I::UnitRange{Int}) = StateVec(s.data[I]; q = s.q)
+Base.getindex(s::StateVec, I::AbstractVector{Int}) = StateVec(s.data[I]; q = s.q)
+
 LinearAlgebra.norm(s::StateVec) = norm(s.data)
 LinearAlgebra.normalize!(s::StateVec) = normalize!(s.data)
 LinearAlgebra.normalize(s::StateVec) = normalize(s.data)
