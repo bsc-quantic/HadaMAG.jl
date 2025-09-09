@@ -32,11 +32,13 @@ julia> ψ = rand_haar(8; depth=2)
 
 # Compute the 2nd-order Stabilizer Rényi Entropy
 julia> (sre2, lost_norm) = SRE(ψ, 2)
-(6.028326027457565, 1.1102230246251565e-16)
+[==================================================] 100.0%  (256/256)
+(5.995845930125004, 9.992007221626409e-16)
 
 # Estimate the 2nd-order SRE using Monte Carlo with 10000 samples
 julia> sre2_mc = MC_SRE(ψ, 2; Nsamples=10000)
-6.023172434713934
+[==================================================] 100.0%  (10000/10000)
+5.990668774676943
 ```
 
 ## Backends
