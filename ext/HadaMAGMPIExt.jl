@@ -218,7 +218,7 @@ end
     return (-log2(m2SAM / N), 1.0 - p2SAM / N)
 end
 
-function MC_SRE_MPI(
+function MC_SRE(
     ψ,
     q,
     Nβ::Int,
