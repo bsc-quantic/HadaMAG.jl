@@ -40,60 +40,93 @@ function generate_binary(n::Int, comm = MPI.COMM_WORLD)
     return HadaMAG.generate_binary_splitted(n, rank, P)
 end
 
-function scatterv(A::AbstractVector{T}, comm::MPI.Comm; root::Int = 0) where {T}
-    rank = MPI.Comm_rank(comm)
-    P = MPI.Comm_size(comm)
+"""
+    threaded_chunk_reduce(len, compute_chunk;
+                               progress=false, progress_stride=0, hz=8, io=stderr)
 
-    # ─── 1) Root builds the counts & displs, then UBuffer/VBuffer ───────────
-    if rank == root
-        counts, displs = HadaMAG.partition_counts(length(A), P)
+Static-scheduled threaded map-reduce over `len` items.
 
-        # make a 2×P matrix: row1=counts, row2=displs
-        sizes = vcat(vcat(counts...)', vcat(displs...)')       # 2×P Array{Int,2}
-        size_ubuf = UBuffer(sizes, 2)            # each column is a NTuple{2,Int}
-        vbuf = VBuffer(A, counts)
-    else
-        size_ubuf = UBuffer(nothing)
-        vbuf = VBuffer(nothing)
-    end
+The iteration space is partitioned once and each Julia thread `tid`
+receives a disjoint, contiguous subrange `[istart, iend]`. Your
+`compute_chunk` is called exactly once per thread with those bounds so
+you can index *thread-local* scratch by `tid`.
 
-    # ─── 2) Scatter out each column of `sizes` as an NTuple{2,Int} ─────────
-    local_count, local_disp =           # destructure the two‑element tuple
-        MPI.Scatter(size_ubuf, NTuple{2,Int}, root, comm)
+# Arguments
+- `len::Integer`: number of logical items to process.
+- `compute_chunk::Function`: called as compute_chunk(tid::Int, istart::Int, iend::Int, p, stride) (progress-aware).
+ It must return a 2-tuple `(a, b)`; all per-thread tuples are reduced by **elementwise sum**.
 
-    # ─── 3) Now everyone allocates exactly the right 1‑D buffer ─────────────
-    local_buf = zeros(T, local_count)
+# Keywords
+- `progress::Bool=false`: enable a low-overhead progress indicator.
+- `progress_stride::Int=0`: if `> 0`, the 5-arg form is used and you may
+  call `HadaMAG.tick!(p, k)` inside `compute_chunk` every `k=stride`
+  iterations; if `0`, a single coarse tick equal to the thread’s slice
+  length is emitted after `compute_chunk` returns.
+- `hz::Real=8`: max redraw rate for the progress indicator (ignored if
+  `progress=false`).
+- `io::IO=stderr`: stream for progress output.
 
-    # ─── 4) And scatter the data into it ───────────────────────────────────
-    local_chunk = MPI.Scatterv!(vbuf, local_buf, root, comm)
-
-    return local_chunk, local_disp
-end
-
-# Helper threaded map-reduce over chunks of a 1-D array
-function threaded_chunk_reduce(len::Integer, f::Function, comm::MPI.Comm)
+# Returns
+The tuple `(a::Float64, b::Float64)`, elementwise sum of the
+`compute_chunk` results from all threads.
+"""
+function threaded_chunk_reduce(
+    len::Integer,
+    compute_chunk::Function;
+    progress::Bool = false,
+    progress_stride::Int = 0,
+    hz::Real = 8,
+    io::IO = stderr,
+)
     nthr = Threads.nthreads()
     tcnt, tdisp = HadaMAG.partition_counts(len, nthr)
+    acc = fill((0.0, 0.0), nthr)
 
-    # one slot per thread
-    acc = Vector{Tuple{Float64,Float64}}(undef, nthr)
-    @sync for tid = 1:nthr
-        Threads.@spawn begin
-            istart = tdisp[tid] + 1
-            iend = tdisp[tid] + tcnt[tid]
-            acc[tid] = f(istart, iend)
-            # @show "Thread $tid processing range [$istart, $iend], result: $(acc[tid])"
+    p =
+        progress ? HadaMAG.CounterProgress(len; hz = hz, io = io, tty = true) :
+        HadaMAG.NoProgress()
+
+    # tiny adaptor so existing 3-arg compute_chunk keeps working
+    @inline function call_chunk(f, tid, istart, iend)
+        if progress && progress_stride > 0
+            return f(tid, istart, iend, p, progress_stride)
+        else
+            return f(tid, istart, iend, p, 0) # 0 means no progress
         end
     end
 
-    # now sum all the (a,b,c) tuples
-    a, b = 0.0, 0.0, 0.0
-    for (a₁, b₁) in acc
-        a += a₁;
-        b += b₁
+    Threads.@threads :static for _ = 1:nthr
+        tid = Threads.threadid()
+        istart = tdisp[tid] + 1
+        iend = tdisp[tid] + tcnt[tid]
+        if tcnt[tid] == 0
+            acc[tid] = (0.0, 0.0)
+        else
+            acc[tid] = call_chunk(compute_chunk, tid, istart, iend)
+            # coarse progress: count this thread's whole slice as done
+            if progress && progress_stride == 0
+                HadaMAG.tick!(p, iend - istart + 1)
+            end
+        end
+    end
+
+    HadaMAG.finish!(p)
+
+    a = 0.0;
+    b = 0.0
+    @inbounds for (a1, b1) in acc
+        a += a1;
+        b += b1
     end
     return a, b
 end
+
+threaded_chunk_reduce(f::Function, len::Integer; kwargs...) =
+    threaded_chunk_reduce(len, f; kwargs...)
+threaded_chunk_reduce(len::Integer, f::Function, ::MPI.Comm; kwargs...) =
+    threaded_chunk_reduce(len, f; kwargs...)
+threaded_chunk_reduce(f::Function, len::Integer, ::MPI.Comm; kwargs...) =
+    threaded_chunk_reduce(len, f; kwargs...)
 
 # Scatter a contiguous range 1:n over MPI ranks,
 # returning your local index-range and the displs if you need them
@@ -106,219 +139,178 @@ function scatter_range(n::Int, comm::MPI.Comm)
     return istart:iend, (counts, displs)
 end
 
-function MC_SRE2(
-    ψ,
-    Nβ::Int,
-    Nsamples::Int,
-    seed::Union{Nothing,Int};
-    cleanup = true,
-)
-    # TODO: create a macro for this mpi rank assignment
-    MPI.Initialized() || MPI.Init()
-    rank = MPI.Comm_rank(MPI.COMM_WORLD)
-    comm = MPI.COMM_WORLD
-    mpisize = MPI.Comm_size(comm)
-
-    # Set a random seed
-    seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
-
-    # Create a temporary directory for storing results
-    tmpdir = rank == 0 ? mktempdir() : nothing
-    tmpdir = MPI.bcast(tmpdir, 0, comm)
-
-    beta_val(i) = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
-    counts, displs = HadaMAG.partition_counts(Nβ, mpisize)
-    r = rank + 1 # 1-based for arrays
-    start = displs[r] + 1
-    stop = displs[r] + counts[r]
-    beta_rank = beta_val.(start:stop) # works even when counts[r]==0 (empty range)
-
-    m2 = 0.0
-    try
-        # Each rank processes its own beta values
-        for i = 1:length(beta_rank)
-            β = beta_rank[i]
-            # for i = 1:Nβ
-            # β = Float64(i) / Nβ
-            # convert beta value to j
-            idx = (β * (Nβ - 1) |> round |> Int) + 1
-
-            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + idx, β, idx, tmpdir)
-        end
-
-        MPI.Barrier(MPI.COMM_WORLD)
-
-        # Rank 0 computes the average of the results for each β
-        if rank == 0
-            x, res_means, res_stds, m2ADD_means, m2ADD_stds, naccepted =
-                HadaMAG.process_files(seed; folder = tmpdir, Nβ)
-
-            # Compute the final result using Simpson's rule
-            integral_res = HadaMAG.integrate_simpson(x, res_means)
-            integral_m2ADD = HadaMAG.integrate_simpson(x, m2ADD_means)
-
-            m2 = -log2(2^(-integral_res) + integral_m2ADD)
-        end
-    finally
-        if rank == 0
-            # Rank 0 cleans up the temporary directory
-            if cleanup
-                rm(tmpdir, force = true, recursive = true)
-            else
-                @info "Retaining temp directory at: $tmpdir"
-            end
-        end
-    end
-
-    MPI.Barrier(MPI.COMM_WORLD)
-
-    # Broadcast the result to all ranks
-    m2 = MPI.Bcast(m2, 0, comm)
-
-    return m2
-end
-
-@fastmath function SRE(ψ, q)
+@fastmath function SRE(ψ, q; progress::Bool = true)
     MPI.Initialized() || MPI.Init()
     comm = MPI.COMM_WORLD
     rank, nprocs = MPI.Comm_rank(comm), MPI.Comm_size(comm)
     L = qubits(ψ)
-    dim = 2^L
+    dim = 1 << L
 
-    local_xtab, local_zwhere, displs, _ = generate_binary(L, comm)
+    XTAB, Zwhere, displs, _ = generate_binary(L, comm)
 
     # Split out a node‐local (shared‐memory) communicator
     shm_comm = MPI.Comm_split_type(comm, MPI.COMM_TYPE_SHARED, rank)
     shm_rank = MPI.Comm_rank(shm_comm)
 
     # Allocate the *full* scratch arrays…
-    TMP1 = zeros(Float64, dim)
-    TMP2 = zeros(Float64, dim)
-    Xloc1 = zeros(Float64, dim)
-    Xloc2 = zeros(Float64, dim)
+    TMP1 = Vector{Float64}(undef, dim)
+    TMP2 = Vector{Float64}(undef, dim)
+    Xvec1 = Vector{Float64}(undef, dim)
+    Xvec2 = Vector{Float64}(undef, dim)
 
     # … and initialize them in parallel
     Threads.@threads for i = 1:dim
         r = real(ψ[i])
         im = imag(ψ[i])
-        Xloc1[i] = r
-        Xloc2[i] = im
+        Xvec1[i] = r
+        Xvec2[i] = im
         TMP1[i] = r + im
         TMP2[i] = im - r
     end
 
-    # Do the local work
+    # One `inVR` per thread (thread-local scratch)
+    scratch_inVR = [Vector{Float64}(undef, dim) for _ = 1:Threads.nthreads()]
+
+    progress_stride = progress ? max(div(length(XTAB), 100), 10) : 0 # update ~100 times
+
+    # Local threaded work — no copies of TMP1/TMP2
     PS2, MS2 = threaded_chunk_reduce(
-        length(local_xtab),
-        (i, j) -> HadaMAG._compute_chunk_SRE_v23(
-            displs,
-            i,
-            j,
+        length(XTAB);
+        progress = (progress && rank == 0),
+        progress_stride,
+    ) do tid, istart, iend, p_, stride
+        HadaMAG.compute_chunk_sre(
+            istart,
+            iend,
             ψ,
             q,
-            local_zwhere,
-            local_xtab,
-            copy(TMP1),
-            copy(TMP2),
-            Xloc1,
-            Xloc2,
-        ),
-        comm,
-    )
+            Zwhere,
+            XTAB,
+            TMP1,
+            TMP2,
+            Xvec1,
+            Xvec2,
+            scratch_inVR[tid],
+            p_,
+            stride,
+        )
+    end
 
-    # Pack into one small vector
-    local_vals = [PS2, MS2]
+    # Pack + intra-node reduction
+    # node_vals = MPI.Allreduce([PS2, MS2], MPI.SUM, shm_comm)
+    buf = [PS2, MS2]
+    MPI.Allreduce!(buf, MPI.SUM, shm_comm)   # in-place
+    node_vals = buf
 
-    # Do the cheap intra‑node reduction
-    # All threads/processes on the same physical node
-    node_vals = MPI.Allreduce(local_vals, MPI.SUM, shm_comm)
-
-    # Split out inter‑node communicator
+    # Inter-node reduction by leaders
     color = (shm_rank == 0 ? 0 : nothing)
     inter_comm = MPI.Comm_split(comm, color, rank)
-
-    # Leaders do the inter‑node sum
     global_leader = Vector{Float64}(undef, 2)
     if shm_rank == 0
         global_leader .= MPI.Allreduce(node_vals, MPI.SUM, inter_comm)
     end
 
-    # Broadcast the final 3‑vector down to all threads on each node
+    # Broadcast to node
     MPI.Bcast!(global_leader, 0, shm_comm)
     p2SAM, m2SAM = Tuple(global_leader)
 
-    return (-log2(m2SAM/length(data(ψ))), 1.0 - p2SAM/length(data(ψ))) # TODO: should we really return 0.0 there?
+    N = length(data(ψ))
+    return (-log2(m2SAM / N), 1.0 - p2SAM / N)
 end
 
-# The refactored MC_quantity:
-function MC_SRE(
+function MC_SRE_MPI(
     ψ,
     q,
     Nβ::Int,
-    Nsamples::Int,
-    seed::Union{Nothing,Int};
-    cleanup::Bool = true,
+    Nsamples::Int;
+    seed::Union{Nothing,Int} = nothing,
+    progress = true,
 )
-
     MPI.Initialized() || MPI.Init()
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
 
-    # Set a random seed (only on rank 0), then broadcast to all ranks
-    seed = rank == 0 ? seed === nothing ? rand(1:(10^9)) : seed : 0
-    seed = MPI.Bcast(seed, 0, comm)
+    base_seed = (rank == 0 ? (seed === nothing ? rand(1:(10^9)) : seed) : 0)
+    base_seed = MPI.Bcast(base_seed, 0, comm)
 
-    # Create a temporary directory for storing results
-    tmpdir = rank == 0 ? mktempdir() : nothing
-    tmpdir = MPI.bcast(tmpdir, 0, comm)
+    X = data(ψ)
+    dim = length(X)
+    L = qubits(ψ)
 
-    # scatter the β‐indices
+    # shared tmp1/tmp2 per rank
+    tmp1 = Vector{Float64}(undef, dim)
+    tmp2 = Vector{Float64}(undef, dim)
+    HadaMAG.build_tmp!(tmp1, tmp2, X)
+
+    # per-thread scratch
+    nthr = Threads.nthreads()
+    scratch = [Vector{Float64}(undef, dim) for _ = 1:nthr]
+
+    p =
+        (progress && rank == 0) ?
+        HadaMAG.CounterProgress(Nsamples; hz = 8, io = stderr, tty = true) :
+        HadaMAG.NoProgress()
+    progress_stride = progress ? max(div(length(Nsamples), 100), 10) : 0 # update ~100 times
+
+    # local β block
     idx_range, _ = scatter_range(Nβ, comm)
     β_vals = Float64.((idx_range .- 1) ./ (Nβ - 1))
 
-    # do all the work inside the temp-dir context:
-    m2 = 0.0
-    try
-        # each rank writes its chunk of files
-        for (local_i, β) in enumerate(β_vals)
-            global_idx = idx_range[1] + local_i - 1
-            HadaMAG._compute_MC_SRE_β(
-                ψ,
-                q,
-                Nsamples,
-                seed + global_idx,
-                β,
-                global_idx,
-                tmpdir,
-            )
-        end
+    local_M2 = Vector{Float64}(undef, length(β_vals))
+    local_M2ADD = Vector{Float64}(undef, length(β_vals))
+    local_P2 = Vector{Float64}(undef, length(β_vals))
 
-        MPI.Barrier(comm)
+    Threads.@threads :static for k in eachindex(β_vals)
+        tid = Threads.threadid()
+        β = β_vals[k]
+        j = first(idx_range) + k - 1
+        m2_mean, _m2sq, m2add_mean, p2_mean, _n = HadaMAG.mc_sre_β!(
+            X,
+            tmp1,
+            tmp2,
+            scratch[tid],
+            q,
+            Nsamples,
+            base_seed + j,
+            β,
+            L,
+            p,
+            progress_stride,
+        )
+        local_M2[k] = m2_mean
+        local_M2ADD[k] = m2add_mean
+        local_P2[k] = p2_mean
+    end
 
-        # rank 0 reads all the files, computes the Simpson integrals
+    # helper: Gatherv to root using VBuffer
+    gather_vec(v) = begin
+        nloc = length(v)
+        counts = MPI.gather(nloc, comm; root = 0)
         if rank == 0
-            x, res_means, _, m2_means, _, _ =
-                HadaMAG.process_files(seed; folder = tmpdir, Nβ)
-
-            I_res = HadaMAG.integrate_simpson(x, res_means)
-            I_m2ADD = HadaMAG.integrate_simpson(x, m2_means)
-
-            m2 = -log2(2^(-I_res) + I_m2ADD)
-        end
-
-    finally
-        if rank == 0 # Rank 0 cleans up the temporary directory
-            if cleanup
-                rm(tmpdir, force = true, recursive = true)
-            else
-                @info "Retaining temp directory at: $tmpdir"
-            end
+            counts32 = Int32.(counts)
+            displs32 = Int32[0; cumsum(counts32[1:(end-1)])]
+            total = sum(counts32)
+            out = Vector{Float64}(undef, total)
+            MPI.Gatherv!(v, MPI.VBuffer(out, counts32, displs32), comm; root = 0)
+            out
+        else
+            MPI.Gatherv!(v, nothing, comm; root = 0)
+            Float64[]
         end
     end
 
-    MPI.Barrier(comm)
+    all_M2 = gather_vec(local_M2)
+    all_M2ADD = gather_vec(local_M2ADD)
+    all_P2 = gather_vec(local_P2)
 
-    # broadcast the final result m2 to all ranks
+    m2 = 0.0
+    if rank == 0
+        Nβ % 2 == 1 || error("Simpson needs an odd number of β points.")
+        x = collect((0:(Nβ-1)) ./ (Nβ-1))
+        I_res = HadaMAG.integrate_simpson_uniform(x, all_M2)
+        I_m2ADD = HadaMAG.integrate_simpson_uniform(x, all_M2ADD)
+        m2 = -log2(2.0^(-I_res) + I_m2ADD)
+    end
     m2 = MPI.Bcast(m2, 0, comm)
 
     return m2

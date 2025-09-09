@@ -5,92 +5,110 @@ using HadaMAG
 
 # This module provides the low-level kernels for the Serial backend.
 
-function MC_SRE2(ψ, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup = true)
-    # Set a random seed
-    seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
-    tmpdir = mktempdir()
-
-    m2 = 0.0
-    try
-        for i = 1:Nβ
-            β = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
-
-            HadaMAG._compute_MC_SRE2_β(ψ, Nsamples, seed + i, β, i, tmpdir)
-        end
-
-        # Compute the average of the results for each β
-        x, res_means, res_stds, m2ADD_means, m2ADD_stds, naccepted =
-            HadaMAG.process_files(seed; folder = tmpdir, Nβ)
-
-        # Compute the final result using Simpson's rule
-        integral_res = HadaMAG.integrate_simpson(x, res_means)
-        integral_m2ADD = HadaMAG.integrate_simpson(x, m2ADD_means)
-
-        m2 = -log2(2^(-integral_res) + integral_m2ADD)
-    finally
-        if cleanup
-            rm(tmpdir, force = true, recursive = true)
-        else
-            @info "Retaining temp directory at: $tmpdir"
-        end
-    end
-
-    return m2
-end
-
-function MC_SRE(ψ, q, Nβ::Int, Nsamples::Int, seed::Union{Nothing,Int}; cleanup = true)
-    # Set a random seed
-    seed = seed === nothing ? floor(Int, rand() * 1e9) : seed
-    tmpdir = mktempdir()
-
-    m2 = 0.0
-    try
-        for i = 1:Nβ
-            β = Float64(i - 1) / (Nβ - 1) # so that β ∈ [0, 1]
-
-            HadaMAG._compute_MC_SRE_β(ψ, q, Nsamples, seed + i, β, i, tmpdir)
-        end
-
-        # Compute the average of the results for each β
-        x, res_means, res_stds, m2ADD_means, m2ADD_stds, naccepted =
-            HadaMAG.process_files(seed; folder = tmpdir, Nβ)
-
-        # Compute the final result using Simpson's rule
-        integral_res = HadaMAG.integrate_simpson(x, res_means)
-        integral_m2ADD = HadaMAG.integrate_simpson(x, m2ADD_means)
-
-        m2 = -log2(2^(-integral_res) + integral_m2ADD)
-    finally
-        if cleanup
-            rm(tmpdir, force = true, recursive = true)
-        else
-            @info "Retaining temp directory at: $tmpdir"
-        end
-    end
-
-    return m2
-end
-
-function SRE(ψ, q)
+function SRE(ψ, q; progress = true)
     dim = length(data(ψ))
     L = qubits(ψ)
 
     XTAB, Zwhere = generate_gray_table(L, 2)
 
-    p2SAM, mSAM = HadaMAG._compute_chunk_SRE(1, dim, ψ, q, Zwhere, XTAB)
+    # Allocate the *full* scratch arrays…
+    TMP1 = Vector{Float64}(undef, dim)
+    TMP2 = Vector{Float64}(undef, dim)
+    Xloc1 = Vector{Float64}(undef, dim)
+    Xloc2 = Vector{Float64}(undef, dim)
+
+    # … and initialize them in parallel
+    Threads.@threads for i = 1:dim
+        r = real(ψ[i])
+        im = imag(ψ[i])
+        Xloc1[i] = r
+        Xloc2[i] = im
+        TMP1[i] = r + im
+        TMP2[i] = im - r
+    end
+
+    inVR = Vector{Float64}(undef, dim)
+
+    pbar = progress ? HadaMAG.CounterProgress(length(XTAB); hz = 8) : HadaMAG.NoProgress()
+    progress_stride = progress ? max(div(length(XTAB), 100), 10) : 0 # update ~100 times
+
+    p2SAM, mSAM = HadaMAG.compute_chunk_sre(
+        1,
+        dim,
+        ψ,
+        q,
+        Zwhere,
+        XTAB,
+        TMP1,
+        TMP2,
+        Xloc1,
+        Xloc2,
+        inVR,
+        pbar,
+        progress_stride,
+    )
 
     return (-log2(mSAM/dim), abs(1-p2SAM/dim))
 end
 
-function SRE2(ψ)
-    dim = length(data(ψ))
+function MC_SRE(
+    ψ,
+    q,
+    Nβ::Int,
+    Nsamples::Int;
+    seed::Union{Nothing,Int} = nothing,
+    progress = true,
+)
+    Nβ % 2 == 1 || error("Simpson needs an odd number of β points.")
+    X = data(ψ)
+    dim = length(X)
     L = qubits(ψ)
 
-    XTAB, Zwhere = generate_gray_table(L, 2)
+    # Precompute tmp1/tmp2
+    tmp1 = Vector{Float64}(undef, dim)
+    tmp2 = Vector{Float64}(undef, dim)
+    HadaMAG.build_tmp!(tmp1, tmp2, X)
 
-    p2SAM, m2SAM, = HadaMAG._compute_chunk_SRE2(1, dim, ψ, Zwhere, XTAB)
+    # Per-thread scratch for inVR
+    inVR = Vector{Float64}(undef, dim)
 
-    return (-log2(m2SAM/dim), abs(1-p2SAM/dim))
+    # Outputs per β
+    M2 = Vector{Float64}(undef, Nβ)
+    M2ADD = Vector{Float64}(undef, Nβ)
+    P2 = Vector{Float64}(undef, Nβ)
+
+    base_seed = seed === nothing ? rand(1:(10^9)) : seed
+
+    p =
+        progress ? HadaMAG.CounterProgress(Nsamples; hz = 8, io = stderr) :
+        HadaMAG.NoProgress()
+    progress_stride = progress ? max(div(Nsamples, 100), 10) : 0 # update ~100 times
+
+    for i = 1:Nβ
+        β = (i - 1) / (Nβ - 1)
+        m2_mean, _m2sq, m2add_mean, p2_mean, _n = HadaMAG.mc_sre_β!(
+            X,
+            tmp1,
+            tmp2,
+            inVR,
+            q,
+            Nsamples,
+            base_seed + i,
+            β,
+            L,
+            p,
+            progress_stride,
+        )
+        M2[i] = m2_mean
+        M2ADD[i] = m2add_mean
+        P2[i] = p2_mean
+    end
+
+    x = collect((0:(Nβ-1)) ./ (Nβ-1))
+    I_res = HadaMAG.integrate_simpson_uniform(x, M2)
+    I_m2ADD = HadaMAG.integrate_simpson_uniform(x, M2ADD)
+    m2 = -log2(2.0^(-I_res) + I_m2ADD)
+    return m2
 end
 
 function mana_SRE2(ψ)
