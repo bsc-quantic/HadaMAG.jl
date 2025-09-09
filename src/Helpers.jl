@@ -171,6 +171,45 @@ function integrate_simpson(x::AbstractVector, y::AbstractVector)
 end
 
 """
+    build_tmp!(tmp1, tmp2, X)
+
+Compute `tmp1 = real(X)+imag(X)`, `tmp2 = imag(X)-real(X)` in place.
+`X` is the complex state vector (length = 2^L).
+"""
+@fastmath function build_tmp!(
+    tmp1::AbstractVector{Float64},
+    tmp2::AbstractVector{Float64},
+    X::AbstractVector{ComplexF64},
+)
+    @inbounds @simd for i in eachindex(X)
+        r = real(X[i]);
+        im = imag(X[i])
+        tmp1[i] = r + im
+        tmp2[i] = im - r
+    end
+    return nothing
+end
+
+"""
+    integrate_simpson_uniform(x, y) -> Float64
+
+Simpson's rule on a **uniform** grid `x`. Requires an odd number of points.
+"""
+@fastmath function integrate_simpson_uniform(
+    x::AbstractVector{<:Real},
+    y::AbstractVector{<:Real},
+)
+    n = length(x) - 1
+    n % 2 == 0 || error("Simpson needs an even number of subintervals (odd #points).")
+    h = (x[end] - x[1]) / n
+    @views begin
+        odd = sum(y[2:2:(end-1)])
+        even = sum(y[3:2:(end-2)])
+    end
+    return (h/3) * (y[1] + y[end] + 4*odd + 2*even)
+end
+
+"""
     fast_hadamard_qutrit!(ψ::AbstractVector{Complex{T}}) where T<:Real
 
 In‐place generalized Hadamard (H₃) on each of the log₃(length(ψ)) qutrits
