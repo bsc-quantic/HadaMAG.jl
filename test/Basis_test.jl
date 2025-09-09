@@ -29,7 +29,7 @@
             # for all ranks gives the same result as `generate_binary`
 
             # run tests for a variety of n and P
-            for n in 2:6, P in 1:5
+            for n = 2:6, P = 1:5
                 # reference full table
                 codes_ref, flips_ref = generate_gray_table(n, 2)
 
@@ -37,16 +37,16 @@
                 all_codes = UInt64[]
                 all_flips = Int[]
 
-                for rank in 0:P-1
+                for rank = 0:(P-1)
                     xtab, zwhere, code_off, flip_off =
-                    HadaMAG.generate_binary_splitted(n, rank, P)
-                                        append!(all_codes, xtab)
+                        HadaMAG.generate_binary_splitted(n, rank, P)
+                    append!(all_codes, xtab)
                     append!(all_flips, zwhere)
 
                     # test the code‐offset against the codes partition
                     N = Int(1) << n
-                    code_counts, code_displs = HadaMAG.partition_counts(N,    P)
-                    flip_counts, flip_displs = HadaMAG.partition_counts(N-1,  P)
+                    code_counts, code_displs = HadaMAG.partition_counts(N, P)
+                    flip_counts, flip_displs = HadaMAG.partition_counts(N-1, P)
 
                     @test code_off == code_displs[rank+1]
                     @test flip_off == flip_displs[rank+1]
@@ -58,14 +58,14 @@
         end
 
         @testset "Splitted code" begin
-            for n in 2:6, P in 1:5
+            for n = 2:6, P = 1:5
                 # reference full table
                 codes_ref, flips_ref = generate_gray_table(n, 2)
 
                 all_codes = UInt64[]
                 all_flips = Int[]
 
-                for rank in 0:P-1
+                for rank = 0:(P-1)
                     # now returns (xtab, zwhere, code_off, flip_off)
                     xtab, zwhere, code_off, flip_off =
                         HadaMAG.generate_binary_splitted(n, rank, P)
@@ -75,8 +75,8 @@
 
                     # test the code‐offset against the codes partition
                     N = Int(1) << n # 2^n
-                    code_counts, code_displs = HadaMAG.partition_counts(N,    P)
-                    flip_counts, flip_displs = HadaMAG.partition_counts(N-1,  P)
+                    code_counts, code_displs = HadaMAG.partition_counts(N, P)
+                    flip_counts, flip_displs = HadaMAG.partition_counts(N-1, P)
 
                     @test code_off == code_displs[rank+1]
                     @test flip_off == flip_displs[rank+1]
