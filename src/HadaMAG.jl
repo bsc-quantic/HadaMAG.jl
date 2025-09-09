@@ -2,6 +2,8 @@ module HadaMAG
 
 include("Helpers.jl")
 
+include("Progress.jl")
+
 include("Basis.jl")
 export generate_gray_table
 
