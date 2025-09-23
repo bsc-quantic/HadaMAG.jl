@@ -9,7 +9,7 @@ A lightweight container for a pure quantum state of `n` *q*-dits
 |0⋯00⟩, |0⋯01⟩, …, |q−1⋯(q−1)⟩.
 """
 struct StateVec{T,q}
-    data::Vector{Complex{T}}
+    data::Vector{T}
     n::Int
     q::Int
 end
@@ -37,10 +37,10 @@ julia> StateVec(ψ) # defaults to qubits
 StateVec{Float64,2}(n=4, q=2)
 ```
 """
-function StateVec(vec::AbstractVector{<:Complex{T}}; q::Int = 2) where {T}
+function StateVec(vec::AbstractVector{T}; q::Int = 2) where {T}
     n, ispow = _power_q(length(vec), q)
     ispow || throw(ArgumentError("length(vec)=$(length(vec)) is not a power of q=$q"))
-    return StateVec{T,q}(Vector{Complex{T}}(vec), n, q)
+    return StateVec{T,q}(Vector{T}(vec), n, q)
 end
 
 qudits(s::StateVec{T,q}) where {T,q} = s.n
@@ -271,13 +271,13 @@ function apply_2gate!(
 end
 
 """
-    apply_2gate!(sv::StateVec{T,2}, gate::AbstractMatrix{Complex{T}}, q1::Int, q2::Int)
+    apply_2gate!(sv::StateVec{T,2}, gate::AbstractMatrix{T}, q1::Int, q2::Int)
 
 Apply a two-qubit gate directly on a [`StateVec{T,2}`](@ref).
 """
 function apply_2gate!(
     sv::StateVec{T,2},
-    gate::AbstractMatrix{Complex{T}},
+    gate::AbstractMatrix{T},
     q1::Int,
     q2::Int,
 ) where {T}
@@ -287,7 +287,7 @@ end
 
 apply_2gate(
     sv::StateVec{T,2},
-    gate::AbstractMatrix{Complex{T}},
+    gate::AbstractMatrix{T},
     q1::Int,
     q2::Int,
 ) where {T} = apply_2gate!(copy(sv), gate, q1, q2)
@@ -324,6 +324,6 @@ function load_state(path::AbstractString; q::Int = 2)
             throw(ArgumentError("File does not contain real/imaginary pairs"))
         real_parts = vals[1:2:end]
         imag_parts = vals[2:2:end]
-        return StateVec(complex.(real_parts, imag_parts); q = q)
+        return StateVec(ComplexF64.(real_parts, imag_parts); q = q)
     end
 end
