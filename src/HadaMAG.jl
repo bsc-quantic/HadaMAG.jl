@@ -14,6 +14,9 @@ export StateVec,
 include("Backends/Dispatch.jl")
 
 include("SRE.jl")
-export MC_SRE, SRE, mana_SRE2
+export MC_SRE, SRE
+
+include("Mana.jl")
+export Mana
 
 end

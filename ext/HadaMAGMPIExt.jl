@@ -1,9 +1,8 @@
-module HadaMAGMPIExt
+module HadaMAGMPIExt # This module provides the low-level kernels for the MPI backend.
 
 using HadaMAG
 using MPI
 
-# This module provides the low-level kernels for the MPI backend.
 """
     generate_binary(n::Int, comm::MPI.Comm = MPI.COMM_WORLD)
         → (local_codes, local_flips, offset)
@@ -41,8 +40,20 @@ function generate_binary(n::Int, comm = MPI.COMM_WORLD)
 end
 
 """
+    generate_general(n::Int, d::Int; comm = MPI.COMM_WORLD)
+        → (local_codes, local_flips, offset)
+
+Generate the length-`n` *d*-ary Gray sequence **slice** for this rank in `comm`.
+"""
+function generate_general(n::Int, d::Int, comm = MPI.COMM_WORLD)
+    rank = MPI.Comm_rank(comm)
+    P = MPI.Comm_size(comm)
+    return HadaMAG.generate_general_splitted(n, d, rank, P)
+end
+
+"""
     threaded_chunk_reduce(len, compute_chunk;
-                               progress=false, progress_stride=0, hz=8, io=stderr)
+                               progress=false, progress_stride=0, hz=8, io=stderr, nout=2)
 
 Static-scheduled threaded map-reduce over `len` items.
 
@@ -65,6 +76,7 @@ you can index *thread-local* scratch by `tid`.
 - `hz::Real=8`: max redraw rate for the progress indicator (ignored if
   `progress=false`).
 - `io::IO=stderr`: stream for progress output.
+- `nout::Int=2`: number of output values from `compute_chunk` (must be ≥ 1).
 
 # Returns
 The tuple `(a::Float64, b::Float64)`, elementwise sum of the
@@ -77,16 +89,20 @@ function threaded_chunk_reduce(
     progress_stride::Int = 0,
     hz::Real = 8,
     io::IO = stderr,
+    nout::Int = 2,
 )
+    @assert nout ≥ 1 "nout must be ≥ 1"
+
     nthr = Threads.nthreads()
     tcnt, tdisp = HadaMAG.partition_counts(len, nthr)
-    acc = fill((0.0, 0.0), nthr)
 
-    p =
-        progress ? HadaMAG.CounterProgress(len; hz = hz, io = io, tty = true) :
-        HadaMAG.NoProgress()
+    # Accumulate per-thread results in a dense matrix (nout × nthr)
+    acc = zeros(Float64, nout, nthr)
 
-    # tiny adaptor so existing 3-arg compute_chunk keeps working
+    p = progress ? HadaMAG.CounterProgress(len; hz = hz, io = io, tty = true) :
+                   HadaMAG.NoProgress()
+
+    # tiny adaptor (keeps your 5-arg signature)
     @inline function call_chunk(f, tid, istart, iend)
         if progress && progress_stride > 0
             return f(tid, istart, iend, p, progress_stride)
@@ -95,15 +111,23 @@ function threaded_chunk_reduce(
         end
     end
 
-    Threads.@threads :static for _ = 1:nthr
-        tid = Threads.threadid()
+    Threads.@threads :static for tid in 1:nthr
         istart = tdisp[tid] + 1
         iend = tdisp[tid] + tcnt[tid]
+
         if tcnt[tid] == 0
-            acc[tid] = (0.0, 0.0)
+            # leave acc[:, tid] as zeros
         else
-            acc[tid] = call_chunk(compute_chunk, tid, istart, iend)
-            # coarse progress: count this thread's whole slice as done
+            res = call_chunk(compute_chunk, tid, istart, iend)
+
+            # Accept tuples or vectors; enforce length nout
+            lenres = Base.length(res)
+            @assert lenres == nout "compute_chunk must return $nout values; got $lenres"
+            @inbounds for i = 1:nout
+                acc[i, tid] = Float64(res[i])
+            end
+
+            # coarse tick if the chunk didn't use per-iteration progress
             if progress && progress_stride == 0
                 HadaMAG.tick!(p, iend - istart + 1)
             end
@@ -112,13 +136,16 @@ function threaded_chunk_reduce(
 
     HadaMAG.finish!(p)
 
-    a = 0.0;
-    b = 0.0
-    @inbounds for (a1, b1) in acc
-        a += a1;
-        b += b1
+    # Reduce columns by sum, return as NTuple{nout,Float64}
+    out = Vector{Float64}(undef, nout)
+    @inbounds for i = 1:nout
+        s = 0.0
+        @simd for t = 1:nthr
+            s += acc[i, t]
+        end
+        out[i] = s
     end
-    return a, b
+    return Tuple(out)
 end
 
 threaded_chunk_reduce(f::Function, len::Integer; kwargs...) =
@@ -316,44 +343,74 @@ function MC_SRE(
     return m2
 end
 
-function mana_SRE2(ψ)
-    dim = length(data(ψ))
+@fastmath function Mana(ψ::StateVec{ComplexF64,3}; progress::Bool = true)
+    MPI.Initialized() || MPI.Init()
+    comm = MPI.COMM_WORLD
+    rank, nprocs = MPI.Comm_rank(comm), MPI.Comm_size(comm)
     L = qudits(ψ)
-    Ncores = Threads.nthreads() # Number of threads
+    dim = 3^L
 
-    XTAB, Zwhere = generate_gray_table(L, 3)
+    XTAB, Zwhere, displs, _ = generate_general(L, 3, comm)
 
-    # here we know where to act with X_j operator to go from Pauli string number ix, to PS numbered ix+1
-    # also we store XTAB which tells us what Pauli string is at position ix
-    # constistencY; XTAB[ix] ^= XTAB[ix+1] -- only single 1 at position Zwhere[ix]
-    p2SAM = m2SAM = m3SAM = 0.0
+    # Split out a node‐local (shared‐memory) communicator
+    shm_comm = MPI.Comm_split_type(comm, MPI.COMM_TYPE_SHARED, rank)
+    shm_rank = MPI.Comm_rank(shm_comm)
 
-    # divide the gray's code (which has 2^N positions) into Ncores, more or less equal patches
-    # we store the starting and finishing index corresponding to each of the patches in istart and iend
-    istart = [div((i-1)*(length(Zwhere)+1), Ncores) + 1 for i = 1:Ncores]
-    iend = [div(i*(length(Zwhere)+1), Ncores) for i = 1:Ncores]
+    # Allocate the *full* scratch arrays…
+    TMP = Vector{ComplexF64}(undef, dim)
+    conj_Xloc = Vector{ComplexF64}(undef, dim)
 
-    # The last thread processes until the end of Z (here we mimic Z.size()+1 from C++ by adding one extra element, if needed)
-    PS2 = zeros(Float64, Ncores)
-    MS2 = zeros(Float64, Ncores)
-    MS3 = zeros(ComplexF64, Ncores)
-
-    for j = 1:Ncores
-        # Each thread/processes the subrange [istart[j], iend[j]-1]
-        ps2, ms2, ms3 = HadaMAG._compute_chunk_mana_SRE(istart[j], iend[j], ψ, Zwhere, XTAB)
-        PS2[j] = ps2
-        MS2[j] = ms2
-        MS3[j] = ms3
+    # initialize them in parallel
+    Threads.@threads for i = 1:dim
+        TMP[i] = ψ[i]
+        conj_Xloc[i] = conj(ψ[i])
     end
 
-    # Now sum the partial sums to obtain the final results.
-    p2SAM = sum(PS2)
-    m2SAM = sum(MS2)
-    m3SAM = sum(MS3)
+    # One `inV` per thread (thread-local scratch)
+    scratch_inV = [Vector{ComplexF64}(undef, dim) for _ = 1:Threads.nthreads()]
 
-    println("mana = ", log2(p2SAM)/log2(3.0))
+    progress_stride = progress ? max(div(size(XTAB, 2), 100), 10) : 0 # update ~100 times
 
-    # SRE is returned here    return (-log2(m2SAM/dim)/log2(3.0), -1.0*log2(real(m3SAM)/dim)/log2(3.0))
+    # Local threaded work — no copies of TMP1/TMP2
+    p2SAM = threaded_chunk_reduce(
+        size(XTAB, 2);
+        nout=1,
+        progress = (progress && rank == 0),
+        progress_stride,
+    ) do tid, istart, iend, pbar, stride
+        HadaMAG.compute_chunk_mana_qutrits(
+            istart,
+            iend,
+            ψ,
+            Zwhere,
+            XTAB,
+            TMP,
+            conj_Xloc,
+            scratch_inV[tid],
+            pbar,
+            stride,
+        )
+    end
+
+    buf = [only(p2SAM)]
+
+    # -------- Intra-node reduction (shared-memory communicator) --------
+    MPI.Allreduce!(buf, MPI.SUM, shm_comm)
+    node_vals = buf
+
+    # -------- Inter-node reduction among node leaders --------
+    color = (shm_rank == 0 ? 0 : nothing)
+    inter_comm = MPI.Comm_split(comm, color, rank)
+    global_leader = Vector{Float64}(undef, 1)
+    if shm_rank == 0
+        global_leader .= MPI.Allreduce(node_vals, MPI.SUM, inter_comm)
+    end
+
+    # Broadcast to all node members
+    MPI.Bcast!(global_leader, 0, shm_comm)
+    p2SAM = only(global_leader)
+
+    return log2(p2SAM)/log2(3.0)
 end
 
 end

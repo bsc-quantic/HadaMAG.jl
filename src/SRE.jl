@@ -62,7 +62,7 @@ end
 """
     SRE(ψ::StateVec{T,2}; backend = :auto)
 
-Compute the exact Stabilizer Renyi entropy (q) of a quantum state ψ using the HadaMAG algorithm.
+Compute the exact Stabilizer Renyi entropy (q) of a quantum state `ψ` using the HadaMAG algorithm.
 Returns the SRE value and the lost norm of the state vector.
 
 # Arguments
@@ -75,15 +75,6 @@ Returns the SRE value and the lost norm of the state vector.
 """
 function SRE(ψ::StateVec{T,2}, q::Number; backend = :auto, progress = true) where {T}
     _apply_backend(_choose_backend(backend), :SRE, ψ, q; progress)
-end
-
-"""
-    mana_SRE2(ψ::StateVec{T,3}; backend = :auto)
-
-Compute the Mana of a quantum state qu-trit state ψ using the HadaMAG algorithm.
-"""
-function mana_SRE2(ψ::StateVec{T,3}; backend = :auto) where {T}
-    _apply_backend(_choose_backend(backend), :mana_SRE2, ψ)
 end
 
 """
@@ -292,7 +283,7 @@ end
 compute_chunk_sre(
     istart::Int64,
     iend::Int64,
-    ψ::StateVec{Float64,2},
+    ψ::StateVec{ComplexF64,2},
     q::Number,
     Zwhere::Vector{Int64},
     XTAB::Vector{UInt64},
@@ -320,7 +311,7 @@ compute_chunk_sre(
 compute_chunk_sre(
     istart::Int64,
     iend::Int64,
-    ψ::StateVec{Float64,2},
+    ψ::StateVec{ComplexF64,2},
     q::Number,
     Zwhere::Vector{Int64},
     XTAB::Vector{UInt64},
@@ -351,9 +342,9 @@ compute_chunk_sre(
     ::Val{q},                        # exponent (Int or Real)
     istart::Int,
     iend::Int,
-    ψ::StateVec{Float64,2},
-    lvec1::Vector{Int},               # your original `local_vector1`
-    lvec2::Vector{UInt64},            # your original `local_vector2` (bitmasks)
+    ψ::StateVec{ComplexF64,2},
+    Zwhere::Vector{Int},               # your original `local_vector1`
+    XTAB::Vector{UInt64},            # your original `local_vector2` (bitmasks)
     TMP1::Vector{Float64},            # shared, read-only
     TMP2::Vector{Float64},            # shared, read-only
     X1::Vector{Float64},              # shared, read-only
@@ -383,7 +374,7 @@ compute_chunk_sre(
         end
 
         if ix == istart
-            bits = lvec2[ix]
+            bits = XTAB[ix]
             if bits == 0
                 # No flips: one fused blend
                 @simd for r = 1:dim
@@ -401,7 +392,7 @@ compute_chunk_sre(
             end
         else
             # Subsequent ix: flip a single site relative to previous mask
-            site = lvec1[ix-1] - 1                          # your data is 1-based sites
+            site = Zwhere[ix-1] - 1                          # your data is 1-based sites
             mask = flip_and_update_mask!(site, dim, mask, TMP1, TMP2, X1, X2, inVR)
         end
 
@@ -421,7 +412,7 @@ compute_chunk_sre(
 end
 
 """
-    compute_chunk_sre(::Val{2}, istart, iend, ψ, lvec1, lvec2, TMP1, TMP2, X1, X2, inVR) -> (p2, m2)
+    compute_chunk_sre(::Val{2}, istart, iend, ψ, Zwhere, XTAB, TMP1, TMP2, X1, X2, inVR) -> (p2, m2)
 
 Compute contributions for items `ix ∈ [istart, iend]` using a per-thread scratch `inVR`.
 
@@ -435,9 +426,9 @@ Key performance points:
     ::Val{2},                        # exponent (Int or Real)
     istart::Int,
     iend::Int,
-    ψ::StateVec{Float64,2},
-    lvec1::Vector{Int},               # your original `local_vector1`
-    lvec2::Vector{UInt64},            # your original `local_vector2` (bitmasks)
+    ψ::StateVec{ComplexF64,2},
+    Zwhere::Vector{Int},               # your original `local_vector1`
+    XTAB::Vector{UInt64},            # your original `local_vector2` (bitmasks)
     TMP1::Vector{Float64},            # shared, read-only
     TMP2::Vector{Float64},            # shared, read-only
     X1::Vector{Float64},              # shared, read-only
@@ -467,7 +458,7 @@ Key performance points:
         end
 
         if ix == istart
-            bits = lvec2[ix]
+            bits = XTAB[ix]
             if bits == 0
                 # No flips: one fused blend
                 @simd for r = 1:dim
@@ -485,7 +476,7 @@ Key performance points:
             end
         else
             # Subsequent ix: flip a single site relative to previous mask
-            site = lvec1[ix-1] - 1 # your data is 1-based sites
+            site = Zwhere[ix-1] - 1 # your data is 1-based sites
             mask = flip_and_update_mask!(site, dim, mask, TMP1, TMP2, X1, X2, inVR)
         end
 
@@ -509,7 +500,7 @@ end
 
 Apply a single-bit flip at `site` (0-based) on top of the existing `mask`.
 We never mutate `TMP1/TMP2`, instead we read from indices XORed by the
-*new* mask and write the blended values into `inVR`.
+new mask and write the blended values into `inVR`.
 
 - `TMP1/TMP2/X1/X2` are shared, read-only.
 - `inVR` is thread-local; written in full each call.
@@ -737,76 +728,4 @@ end
     end
 
     return ψ
-end
-
-_compute_chunk_mana_SRE(
-    istart::Int64,
-    iend::Int64,
-    ψ::StateVec{Float64,3},
-    Zwhere::Vector{Int64},
-    XTAB::Matrix{Int64},
-) = _compute_chunk_mana_SRE(0, istart, iend, ψ, Zwhere, XTAB)
-
-@fastmath function _compute_chunk_mana_SRE(
-    index::Int64,
-    istart::Int64,
-    iend::Int64,
-    ψ::StateVec{Float64,3},
-    Zwhere::Vector{Int64},
-    XTAB::Matrix{Int64},
-)::Tuple{Float64,Float64,ComplexF64}
-    L = qudits(ψ)
-    dim = 3^L
-
-    p2SAM = m2SAM = m3SAM = 0.0
-
-    TMP = copy(data(ψ))
-    Xloc = copy(data(ψ))
-    inV = zeros(ComplexF64, dim)
-    @assert size(XTAB, 2) == 3^L
-
-    for site = 1:L
-        k = XTAB[site, istart]
-        k > 0 && actX_qutrit!(TMP, site, k)
-    end
-
-    # the worker will update the state TMP when going through the greys code form istart to iend
-    for ix = istart:iend
-        # non-trivial mathematical thing happening: I need to calculate such a vector related to the
-        # state (Xloc) and its propagated version along the grays code, TMP
-        for r = 1:dim
-            inV[r] = conj(Xloc[r]) * copy(TMP[r])
-        end
-
-        # We do fast Hadamard transform of the inVR, inVI
-        @inline fast_hadamard_qutrit!(inV)
-
-        # the vectors obtained with FHT  contain overlaps of given Pauli strings:
-        # the Pauli strings are of the form XTAB[ix] (0...1 corresponding to Z operator)
-        # so to calculate SRE we have to add entries of the resulting vector with the specified powers
-        # (depending on the index of SRE we calculate)
-        # this step does sum over all Z pauli strings, given their X part determined by XTAB[ix]
-        # in time complexity L*2^L (while the naive implementation would be 4^L)
-
-        @inbounds @simd for i in eachindex(inV)
-            p = inV[i]
-            ap = abs(p)              # |p|
-            p2SAM += ap
-
-            m2 = abs2(p)             # |p|^2
-            m2SAM += m2 * m2             # |p|^4
-
-            p2 = p * p
-            m3SAM += p2 * p             # p^3
-        end
-
-        # this takes us from Pauli string at given position of the Greys code to the next one
-        # (by a single action of X_j operator )
-        if ix + index < dim
-            @inline actX_qutrit!(TMP, Zwhere[ix])
-        end
-
-    end
-
-    return p2SAM, m2SAM, m3SAM
 end

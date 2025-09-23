@@ -1,9 +1,8 @@
-module SerialBackend
+module SerialBackend # This module provides the low-level kernels for the Serial backend.
+
 using LinearAlgebra
 using Random
 using HadaMAG
-
-# This module provides the low-level kernels for the Serial backend.
 
 function SRE(ψ, q; progress = true)
     dim = length(data(ψ))
@@ -111,17 +110,31 @@ function MC_SRE(
     return m2
 end
 
-function mana_SRE2(ψ)
+function Mana(ψ; progress = true)
     dim = length(data(ψ))
     L = qudits(ψ)
 
     XTAB, Zwhere = generate_gray_table(L, 3)
 
-    p2SAM, m2SAM, m3SAM = HadaMAG._compute_chunk_mana_SRE(1, dim, ψ, Zwhere, XTAB)
+    # Allocate all the necessary arrays
+    TMP = Vector{ComplexF64}(undef, dim)
+    conj_Xloc = Vector{ComplexF64}(undef, dim)
+
+    for i = 1:dim
+        TMP[i] = ψ[i]
+        conj_Xloc[i] = conj(ψ[i])
+    end
+
+    inV = zeros(ComplexF64, dim)
+
+    pbar = progress ? HadaMAG.CounterProgress(size(XTAB, 2); hz = 8) : HadaMAG.NoProgress()
+    progress_stride = progress ? max(div(size(XTAB, 2), 100), 10) : 0 # update ~100 times
+
+    p2SAM = HadaMAG.compute_chunk_mana_qutrits(1, dim, ψ, Zwhere, XTAB, TMP, conj_Xloc, inV, pbar, progress_stride)
 
     println("mana = ", log2(p2SAM)/log2(3.0))
 
-    return (-log2(m2SAM/dim)/log2(3.0), -1.0*log2(real(m3SAM)/dim)/log2(3.0))
+    return log2(p2SAM)/log2(3.0)
 end
 
 end # module SerialBackend
