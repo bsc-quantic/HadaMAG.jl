@@ -151,6 +151,91 @@ function generate_general(n::Int, q::Int)
     return XTAB, flips
 end
 
+"""
+    generate_general_splitted(n::Int, q::Int, rank::Int, P::Int)
+      → (local_XTAB::Matrix{Int},
+         local_flips::Vector{Int},
+         code_off::Int,
+         flip_off::Int)
+Partition the global Gray‑code sequence of length `q^n` into P contiguous chunks,
+and return just the slice for `rank` (0‑based).  You get back both
+the local Gray codes and the local “flip” indices, _plus_ the two offsets into the global
+arrays.
+
+# Arguments
+- `n::Integer`
+    Number of digits.  The full sequence has length `q^n`.
+- `q::Integer`
+    Base (number of symbols per digit).
+- `rank::Integer`
+    Which slice you want, in `0:(P-1)`.
+- `P::Integer`
+    Total number of partitions (MPI size).
+# Returns
+1. `local_XTAB::Matrix{Int}`
+    Gray codes for global indices
+2. `local_flips::Vector{Int}`
+    Flip indices for global indices
+3. `code_off::Int`
+    0‑based starting index into the full Gray‑code array.
+4. `flip_off::Int`
+    0‑based starting index into the full flip‑array.
+"""
+@fastmath function generate_general_splitted(n::Int, q::Int, rank::Int, P::Int)
+    @assert 0 ≤ rank < P
+    # total number of codes
+    # (Assumes fits in Int; adjust to BigInt if needed.)
+    N = q^n
+
+    # ── block partition for columns [1..N] (0-based offsets in comments) ─────
+    qc, rc = divrem(N, P)
+    code_cnt = qc + (rank < rc ? 1 : 0)
+    code_off = rank*qc + min(rank, rc)      # 0-based
+    # global k's covered by this rank are k = code_off+1 : code_off+code_cnt
+
+    # ── block partition for flips [1..N-1] (pairs k→k+1) ─────────────────────
+    Nf = N - 1
+    qf, rf = divrem(Nf, P)
+    flip_cnt = (Nf > 0) ? qf + (rank < rf ? 1 : 0) : 0
+    flip_off = (Nf > 0) ? (rank*qf + min(rank, rf)) : 0   # 0-based
+
+    # ── preallocate ──────────────────────────────────────────────────────────
+    # Use Int for digits; if your integer_to_gray returns something else,
+    # change eltype/local matrix type accordingly.
+    local_XTAB = Matrix{Int}(undef, n, code_cnt)
+    local_flips = Vector{Int}(undef, flip_cnt)
+
+    # ── 1) build local columns (codes) ───────────────────────────────────────
+    @inbounds for j = 1:code_cnt
+        k = code_off + j                      # global 1-based k
+        code_vec = integer_to_gray(k-1, q, n) # a length-n vector
+        # write column without extra allocs if you prefer:
+        # for i = 1:n; local_XTAB[i, j] = code_vec[i]; end
+        local_XTAB[:, j] = code_vec
+    end
+
+    # ── 2) build local flip positions for transitions k→k+1 ─────────────────
+    @inbounds for j = 1:flip_cnt
+        k = flip_off + j                      # global 1-based k in [1..N-1]
+        a = integer_to_gray(k-1, q, n)
+        b = integer_to_gray(k,   q, n)
+        # first position where they differ (1-based)
+        # manual loop is faster and avoids a closure/alloc from findfirst
+        pos = 0
+        @inbounds for i = 1:n
+            if a[i] != b[i]
+                pos = i
+                break
+            end
+        end
+        # pos must be found for a valid Gray sequence
+        @assert pos != 0
+        local_flips[j] = pos
+    end
+
+    return local_XTAB, local_flips, code_off, flip_off
+end
+
 generate_gray_table(n::Int, ::Val{2}) = generate_binary(n)
 generate_gray_table(n::Int, ::Val{Q}) where {Q} = generate_general(n, Q)
 
