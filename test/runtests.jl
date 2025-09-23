@@ -5,6 +5,7 @@ using Test
     include("Basis_test.jl")
     include("State_test.jl")
     include("SRE_test.jl")
+    include("Mana_test.jl")
 end
 
 @testset "Integration tests" begin
