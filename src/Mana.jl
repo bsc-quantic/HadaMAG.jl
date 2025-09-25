@@ -16,78 +16,6 @@ function Mana(ψ::StateVec{T,3}; backend = :auto, progress = true) where {T}
     _apply_backend(_choose_backend(backend), :Mana, ψ)
 end
 
-_compute_chunk_mana_SRE(
-    istart::Int64,
-    iend::Int64,
-    ψ::StateVec{ComplexF64,3},
-    Zwhere::Vector{Int64},
-    XTAB::Matrix{Int64},
-) = _compute_chunk_mana_SRE(0, istart, iend, ψ, Zwhere, XTAB)
-
-@fastmath function _compute_chunk_mana_SRE(
-    index::Int64,
-    istart::Int64,
-    iend::Int64,
-    ψ::StateVec{ComplexF64,3},
-    Zwhere::Vector{Int64},
-    XTAB::Matrix{Int64},
-)::Tuple{Float64,Float64,ComplexF64}
-    L = qudits(ψ)
-    dim = 3^L
-
-    p2SAM = m2SAM = m3SAM = 0.0
-
-    TMP = copy(data(ψ))
-    Xloc = copy(data(ψ))
-    inV = zeros(ComplexF64, dim)
-    @assert size(XTAB, 2) == 3^L
-
-    for site = 1:L
-        k = XTAB[site, istart]
-        k > 0 && actX_qutrit!(TMP, site, k)
-    end
-
-    # the worker will update the state TMP when going through the greys code form istart to iend
-    for ix = istart:iend
-        # non-trivial mathematical thing happening: I need to calculate such a vector related to the
-        # state (Xloc) and its propagated version along the grays code, TMP
-        for r = 1:dim
-            inV[r] = conj(Xloc[r]) * copy(TMP[r])
-        end
-
-        # We do fast Hadamard transform of the inVR, inVI
-        @inline fast_hadamard_qutrit!(inV)
-
-        # the vectors obtained with FHT  contain overlaps of given Pauli strings:
-        # the Pauli strings are of the form XTAB[ix] (0...1 corresponding to Z operator)
-        # so to calculate SRE we have to add entries of the resulting vector with the specified powers
-        # (depending on the index of SRE we calculate)
-        # this step does sum over all Z pauli strings, given their X part determined by XTAB[ix]
-        # in time complexity L*2^L (while the naive implementation would be 4^L)
-
-        @inbounds @simd for i in eachindex(inV)
-            p = inV[i]
-            ap = abs(p)              # |p|
-            p2SAM += ap
-
-            m2 = abs2(p)             # |p|^2
-            m2SAM += m2 * m2             # |p|^4
-
-            p2 = p * p
-            m3SAM += p2 * p             # p^3
-        end
-
-        # this takes us from Pauli string at given position of the Greys code to the next one
-        # (by a single action of X_j operator )
-        if ix + index < dim
-            @inline actX_qutrit!(TMP, Zwhere[ix])
-        end
-
-    end
-
-    return p2SAM, m2SAM, m3SAM
-end
-
 @fastmath function compute_chunk_mana_qutrits(
     istart::Int,
     iend::Int,
@@ -144,6 +72,8 @@ end
             rotate_perm_site!(perm, s, 1)   # or 2, if your schedule steps by 2
         end
     end
+
+    finish!(pbar)
 
     return p2SAM
 end
