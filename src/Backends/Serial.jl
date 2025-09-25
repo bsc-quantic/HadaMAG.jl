@@ -132,8 +132,6 @@ function Mana(ψ; progress = true)
 
     p2SAM = HadaMAG.compute_chunk_mana_qutrits(1, dim, ψ, Zwhere, XTAB, TMP, conj_Xloc, inV, pbar, progress_stride)
 
-    println("mana = ", log2(p2SAM)/log2(3.0))
-
     return log2(p2SAM)/log2(3.0)
 end
 
