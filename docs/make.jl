@@ -7,10 +7,13 @@ makedocs(
     pages = Any[
         "Home"=>"index.md",
         "Manual"=>[
-        "State Representation"=>"manual/State.md",
-        "Exact SRE"=>"manual/ExactSRE.md",
-        "Backend Configuration"=>"manual/Backends.md",
-        "Custom FHT Library"=>"manual/CustomFHT.md",],
+            "State Representation"=>"manual/State.md",
+            "Exact SRE"=>"manual/ExactSRE.md",
+            "Monte Carlo SRE"=>"manual/MCSRE.md",
+            "Mana Computation"=>"manual/Mana.md",
+            "Backend Configuration"=>"manual/Backends.md",
+            "Custom FHT Library"=>"manual/CustomFHT.md",
+        ],
         # "Manual"=>["Exact SRE"=>"manual/Exact_SRE.md",
         #            "Monte Carlo SRE"=>"manual/Monte_Carlo_SRE.md",
         #            "Mana Computation"=>"manual/Mana_Computation.md",],
