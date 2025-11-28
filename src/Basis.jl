@@ -33,64 +33,76 @@ end
          code_off::Int,
          flip_off::Int)
 
-Partition the global Gray‑code sequence of length 2^n into P contiguous chunks,
-and return just the slice for `rank` (0‑based).  You get back both the local
-Gray codes and the local “flip” indices, _plus_ the two offsets into the global
-arrays.
+Partition the length-`2^n` binary Gray-code sequence into `P` contiguous chunks
+(of global indices) and return the slice for this `rank` (0-based).
+
+For this slice:
+
+  • `local_codes[j]` is the Gray code for the global index `code_off + (j-1)`.
+  • `local_flips[j]` is the bit position that flips between
+    `local_codes[j]` and `local_codes[j+1]`, for `j = 1:(length(local_codes)-1)`.
+
+Cross-chunk transitions (between the last code of slice `rank` and the first
+code of slice `rank+1`) are *not* included in `local_flips`. This makes the
+result suitable for incremental Gray walks that restart from a known mask at
+the beginning of each chunk (e.g. per-rank masked FHT sweeps).
 
 # Arguments
+
 - `n::Integer`
-  Number of bits.  The full sequence has length `2^n`.
+  Number of bits. The full Gray sequence has length `2^n`.
+
 - `rank::Integer`
   Which slice you want, in `0:(P-1)`.
+
 - `P::Integer`
-  Total number of partitions (MPI size).
+  Total number of partitions (e.g. MPI size).
 
 # Returns
+
 1. `local_codes::Vector{UInt64}`
-   Gray codes for global indices
-2. local_flips::Vector{Int}
-    Flip indices for global indices
-code_off::Int
-    0‑based starting index into the full Gray‑code array.
-3. flip_off::Int
-    0‑based starting index into the full flip‑array.
+   Gray codes for global indices in this slice.
+
+2. `local_flips::Vector{Int}`
+   For each *internal* transition within the slice, the 1-based bit index
+   that flips between successive Gray codes.
+
+3. `code_off::Int`
+   0-based starting index into the full Gray-code sequence.
+
+4. `flip_off::Int`
+   0-based starting index aligned with `code_off` (for incremental use).
 """
 @fastmath function generate_binary_splitted(n::Int, rank::Int, P::Int)
     @assert 0 ≤ rank < P
-    N = UInt64(1) << n   # global length = 2^n
+    N  = Int(1) << n              # total number of Gray codes
 
-    # ── inline block‐2 partitioning for [0, N) ───────────────────────────────
-    q, r = divrem(Int(N), P)               # q = ⌊N/P⌋, r = N mod P
-    code_off = UInt64(rank*q + min(rank, r))   # start idx
-    code_cnt = q + (rank < r ? 1 : 0)          # count
+    # Partition codes [0, N) across ranks
+    code_counts, code_displs = HadaMAG.partition_counts(N, P)
+    code_off = code_displs[rank+1]      # 0-based global index
+    code_cnt = code_counts[rank+1]
 
-    # ── inline block‐2 partitioning for [0, N-1) (the flips) ────────────────
-    Nf = Int(N) - 1
-    qf, rf = divrem(Nf, P)
-    flip_off = UInt64(rank*qf + min(rank, rf))
-    flip_cnt = qf + (rank < rf ? 1 : 0)
-
-    # ── pre‐allocate exactly what we need ────────────────────────────────────
+    # 1) local Gray codes
     local_codes = Vector{UInt64}(undef, code_cnt)
-    local_flips = Vector{Int}(undef, flip_cnt)
-
-    # ── 1) build Gray codes ─────────────────────────────────────────────────
     @inbounds @simd for j = 1:code_cnt
-        let i = code_off + (j - 1)
-            local_codes[j] = i ⊻ (i >> 1)
-        end
+        i = UInt64(code_off + (j - 1))  # global integer index
+        local_codes[j] = i ⊻ (i >> 1)
     end
 
-    # ── 2) build flip‐positions ─────────────────────────────────────────────
+    # 2) local flips: only internal transitions within this rank's slice
+    # transitions are between global indices [code_off .. code_off+code_cnt-2]
+    flip_cnt = max(code_cnt - 1, 0)
+    local_flips = Vector{Int}(undef, flip_cnt)
     @inbounds @simd for j = 1:flip_cnt
-        let k = flip_off + (j - 1)
-            # exactly trailing_zeros( gray(k) ⊻ gray(k+1) ) + 1
-            local_flips[j] = trailing_zeros((k ⊻ (k >> 1)) ⊻ ((k+1) ⊻ ((k+1) >> 1))) + 1
-        end
+        g0 = local_codes[j]
+        g1 = local_codes[j+1]
+        local_flips[j] = trailing_zeros(g0 ⊻ g1) + 1
     end
 
-    return local_codes, local_flips, Int(code_off), Int(flip_off)
+    # we can return code_off as the "offset" for both; flips are aligned to codes
+    flip_off = code_off
+
+    return local_codes, local_flips, code_off, flip_off
 end
 
 
@@ -157,81 +169,82 @@ end
          local_flips::Vector{Int},
          code_off::Int,
          flip_off::Int)
-Partition the global Gray‑code sequence of length `q^n` into P contiguous chunks,
-and return just the slice for `rank` (0‑based).  You get back both
-the local Gray codes and the local “flip” indices, _plus_ the two offsets into the global
-arrays.
+
+Partition the q-ary Gray-code sequence of length `q^n` into `P` contiguous
+chunks of global indices and return the slice for this `rank` (0-based).
+
+For this slice:
+
+  • `local_XTAB[:, j]` is the Gray code for global index `code_off + (j-1)`.
+  • `local_flips[j]` is the digit position that changes between
+    `local_XTAB[:, j]` and `local_XTAB[:, j+1]`, for
+    `j = 1:(size(local_XTAB,2)-1)`.
+
+Cross-chunk transitions (between the last column of slice `rank` and the first
+column of slice `rank+1`) are *not* included in `local_flips`. This matches
+the binary `generate_binary_splitted` behavior and is suitable for per-rank
+q-ary Gray walks that restart from a known state at the beginning of each chunk.
 
 # Arguments
-- `n::Integer`
-    Number of digits.  The full sequence has length `q^n`.
-- `q::Integer`
-    Base (number of symbols per digit).
-- `rank::Integer`
-    Which slice you want, in `0:(P-1)`.
-- `P::Integer`
-    Total number of partitions (MPI size).
+- `n::Int`: number of digits; full sequence has length `q^n`.
+- `q::Int`: base (≥ 2).
+- `rank::Int`: which slice you want, in `0:(P-1)`.
+- `P::Int`: total number of partitions.
+
 # Returns
-1. `local_XTAB::Matrix{Int}`
-    Gray codes for global indices
-2. `local_flips::Vector{Int}`
-    Flip indices for global indices
-3. `code_off::Int`
-    0‑based starting index into the full Gray‑code array.
-4. `flip_off::Int`
-    0‑based starting index into the full flip‑array.
+1. `local_XTAB::Matrix{Int}` (size `n × code_cnt`):
+     Gray codes for global indices in this slice.
+2. `local_flips::Vector{Int}`:
+     For each *internal* transition within the slice, the 1-based digit index
+     that changes between successive Gray codes.
+3. `code_off::Int`:
+     0-based starting index into the full Gray-code sequence.
+4. `flip_off::Int`:
+     0-based starting index aligned with `code_off` (by construction
+     `flip_off == code_off`).
 """
 @fastmath function generate_general_splitted(n::Int, q::Int, rank::Int, P::Int)
     @assert 0 ≤ rank < P
-    # total number of codes
-    # (Assumes fits in Int; adjust to BigInt if needed.)
+    @assert q ≥ 2
+
+    # total number of codes (assumes q^n fits in Int)
     N = q^n
 
-    # ── block partition for columns [1..N] (0-based offsets in comments) ─────
-    qc, rc = divrem(N, P)
-    code_cnt = qc + (rank < rc ? 1 : 0)
-    code_off = rank*qc + min(rank, rc)      # 0-based
-    # global k's covered by this rank are k = code_off+1 : code_off+code_cnt
+    # ── partition codes [0, N) exactly like in the binary version ───────────
+    code_counts, code_displs = HadaMAG.partition_counts(N, P)
+    code_off = code_displs[rank + 1]   # 0-based
+    code_cnt = code_counts[rank + 1]
 
-    # ── block partition for flips [1..N-1] (pairs k→k+1) ─────────────────────
-    Nf = N - 1
-    qf, rf = divrem(Nf, P)
-    flip_cnt = (Nf > 0) ? qf + (rank < rf ? 1 : 0) : 0
-    flip_off = (Nf > 0) ? (rank*qf + min(rank, rf)) : 0   # 0-based
+    # ── preallocate local matrix and flips ───────────────────────────────────
+    local_XTAB  = Matrix{Int}(undef, n, code_cnt)
 
-    # ── preallocate ──────────────────────────────────────────────────────────
-    # Use Int for digits; if your integer_to_gray returns something else,
-    # change eltype/local matrix type accordingly.
-    local_XTAB = Matrix{Int}(undef, n, code_cnt)
-    local_flips = Vector{Int}(undef, flip_cnt)
-
-    # ── 1) build local columns (codes) ───────────────────────────────────────
+    # 1) build local columns (Gray codes for this chunk)
     @inbounds for j = 1:code_cnt
-        k = code_off + j                      # global 1-based k
-        code_vec = integer_to_gray(k-1, q, n) # a length-n vector
-        # write column without extra allocs if you prefer:
-        # for i = 1:n; local_XTAB[i, j] = code_vec[i]; end
+        # global 1-based column index
+        k = code_off + j
+        code_vec = integer_to_gray(k - 1, q, n)  # length-n vector
         local_XTAB[:, j] = code_vec
     end
 
-    # ── 2) build local flip positions for transitions k→k+1 ─────────────────
+    # 2) local flips: only internal transitions within this chunk
+    flip_cnt   = max(code_cnt - 1, 0)
+    local_flips = Vector{Int}(undef, flip_cnt)
+
     @inbounds for j = 1:flip_cnt
-        k = flip_off + j                      # global 1-based k in [1..N-1]
-        a = integer_to_gray(k-1, q, n)
-        b = integer_to_gray(k,   q, n)
-        # first position where they differ (1-based)
-        # manual loop is faster and avoids a closure/alloc from findfirst
+        # first position i where column j and j+1 differ
         pos = 0
-        @inbounds for i = 1:n
-            if a[i] != b[i]
+        for i = 1:n
+            if local_XTAB[i, j] != local_XTAB[i, j + 1]
                 pos = i
                 break
             end
         end
-        # pos must be found for a valid Gray sequence
-        @assert pos != 0
+        @assert pos != 0  # valid reflected Gray code must differ in some position
         local_flips[j] = pos
     end
+
+    # flips are aligned to the same global offset as codes
+    flip_off = code_off
 
     return local_XTAB, local_flips, code_off, flip_off
 end
