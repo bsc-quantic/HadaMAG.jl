@@ -74,19 +74,19 @@ this will call through your `.so` instead of the default JLL library.
 """
 call_fht!(vec::Vector{Float64}, L::Int32) = (_fht_fn[])(vec, L)
 
-
 """
     haar_random_unitary(n_qubits::Integer, rng::AbstractRNG = Random.GLOBAL_RNG)
 
-Generate a Haar-distributed random unitary matrix of size 2^n_qubits × 2^n_qubits.
+Generate a Haar-distributed random unitary matrix of size q^n_qudits × q^n_qudits.
 
 # Arguments
-- `n_qubits::Integer`: number of qubits; the output U lives in U(2^n_qubits).
+- `q::Int`: local dimension (2 for qubits, 3 for qutrits).
+- `n_qudits::Integer`: number of qubits; the output U lives in U(2^n_qubits).
 - `rng::AbstractRNG`: random number generator (defaults to `GLOBAL_RNG`).
-
 """
-function haar_random_unitary(n_qubits::Integer, rng::AbstractRNG = Random.GLOBAL_RNG)
-    N = 2 ^ n_qubits
+function haar_random_unitary(q::Integer, n_qudits::Integer, rng::AbstractRNG = Random.GLOBAL_RNG)
+    q in (2, 3) || throw(ArgumentError("haar_random_unitary: only q=2 and q=3 are implemented"))
+    N = q^n_qudits
 
     # draw complex Gaussian matrix
     normal_dist = Normal(0.0, 1.0)
@@ -101,8 +101,13 @@ function haar_random_unitary(n_qubits::Integer, rng::AbstractRNG = Random.GLOBAL
     Q = Matrix(F.Q)
     R = F.R
 
-    # correct diagonal of R to be positive real
-    phases = diag(R) ./ abs.(diag(R))
+    # Fix the column phases so diag(R) becomes positive real (up to measure-zero cases)
+    d = diag(R)
+    phases = similar(d)
+    @inbounds for i in eachindex(d)
+        phases[i] = d[i] == 0 ? one(d[i]) : d[i] / abs(d[i])
+    end
+
     return Q * Diagonal(phases)
 end
 
