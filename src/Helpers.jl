@@ -22,6 +22,21 @@ function partition_counts(n::Integer, P::Integer)
     return counts, displs
 end
 
+# Integer exponentiation by squaring
+@inline function ipow(a::Int, n::Int)::Int
+    n < 0 && throw(ArgumentError("ipow expects n ≥ 0"))
+    r = 1
+    b = a
+    e = n
+    while e > 0
+        if (e & 1) == 1
+            r *= b
+        end
+        e >>= 1
+        b *= b
+    end
+    return r
+end
 
 # Two Ref containers to hold the function pointer and the default function
 const _fht_fn = Ref{Function}()
