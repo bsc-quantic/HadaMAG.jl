@@ -36,7 +36,8 @@ end
     ψ = StateVec(values; q = 2)
 
     @testset "random unitary gate" begin
-        U = HadaMAG.haar_random_unitary(2, MersenneTwister(123))
+        q = 2
+        U = HadaMAG.haar_random_unitary(q, 2, MersenneTwister(123))
 
         # test on every distinct qubit pair and test normalization
         for (q1, q2) in ((1, 2), (1, 3), (2, 3))
