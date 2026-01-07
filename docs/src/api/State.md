@@ -2,5 +2,5 @@
 
 ```@autodocs
 Modules = [HadaMAG]
-Pages = ["State.jl"]
+Pages = ["State.jl", "DensityMatrix.jl"]
 ```

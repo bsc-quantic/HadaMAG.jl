@@ -22,6 +22,16 @@ julia> ψ = StateVec(amplitudes; q=3) # qutrits
 StateVec{ComplexF64,3}(n=3, dim=27, mem=472.0 B)
 ```
 
+## Density Matrices
+**HadaMAG.jl** also provides with the `DensityMatrix{T,q}` struct to represent mixed states. Additionally, you can compute the reduced density matrix of a pure state `ψ::StateVec{T,q}` using the `reduced_density_matrix` function:
+```julia
+julia> ψ = StateVec(amplitudes)
+StateVec{ComplexF64,2}(n=4, dim=16, mem=296.0 B)
+
+julia> ρA = reduced_density_matrix(ψ, 2; side=:right)
+DensityMatrix{ComplexF64,2}(n=2, dim=4, mem=304.0 B)
+```
+
 ### Sampling Haar-random states
 Generate a Haar-random state on `n` qubits, using `depth` layers of random 2-qubit gates:
 
