@@ -11,6 +11,9 @@ include("State.jl")
 export StateVec,
     load_state, rand_haar, apply_2gate!, apply_2gate, qubits, qudits, qudit_dim, data
 
+include("DensityMatrix.jl")
+export DensityMatrix, qudits, qudit_dim, data, reduced_density_matrix
+
 include("Backends/Dispatch.jl")
 
 include("SRE.jl")
