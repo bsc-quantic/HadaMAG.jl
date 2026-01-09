@@ -44,6 +44,7 @@ end
     end
 
     p2SAM = 0.0
+    c = 0.0
     @inbounds for ix = istart:iend
         # cheap progress tick every `stride`
         if stride > 0
@@ -60,16 +61,24 @@ end
 
         fast_hadamard_qutrit!(inV)
 
-        @simd for i in 1:dim
-            p  = inV[i]
-            ap = abs(p)
-            p2SAM += ap
+        # Compensated accumulation of sum(abs(inV[i])).
+        for i in 1:dim
+            ap = abs(inV[i])
+            y  = ap - c
+            t  = p2SAM + y
+            c  = (t - p2SAM) - y
+            p2SAM = t
         end
 
         # Advance permutation to the next column (single-site update)
         if ix < iend
             s = Zwhere[ix] # 1-based site whose digit changes
-            rotate_perm_site!(perm, s, 1)   # or 2, if your schedule steps by 2
+
+            # how much did that digit change? (must be 1 or 2 for a valid ternary Gray step)
+            kstep = mod(XTAB[s, ix+1] - XTAB[s, ix], 3)
+            @assert kstep == 1 || kstep == 2
+
+            rotate_perm_site!(perm, s, kstep)
         end
     end
 
@@ -185,7 +194,7 @@ function vec_rho_tensor_N(ρ::AbstractMatrix{Tc}, N::Int) where {Tc<:Complex}
     size(ρ, 1) == dim && size(ρ, 2) == dim ||
         throw(ArgumentError("ρ must be $(dim)×$(dim) for N=$N qutrits"))
 
-    op_dim = ipow(d * d, N)  # 9^N
+    op_dim = ipow(d * d, N) # 9^N
     v = zeros(Tc, op_dim)
 
     i_digits = Vector{Int}(undef, N)
@@ -280,7 +289,7 @@ function phase_space_expectations_fast(ρ::DensityMatrix{T,3}) where {T<:Complex
     N = ρ.n
     M, _ = build_single_qutrit_M()
 
-    v = vec_rho_tensor_N(ρ.data, N)   # ensure element type matches T
+    v = vec_rho_tensor_N(ρ.data, N) # ensure element type matches T
     apply_M_tensor_N_inplace!(v, Matrix{T}(M), N)
     return v
 end
