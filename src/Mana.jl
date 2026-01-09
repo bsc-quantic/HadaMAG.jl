@@ -13,7 +13,7 @@ Returns the Mana value.
 - `progress`: Whether to show a progress bar. Default to `true`.
 """
 function Mana(ψ::StateVec{T,3}; backend = :auto, progress = true) where {T}
-    _apply_backend(_choose_backend(backend), :Mana, ψ)
+    _apply_backend(_choose_backend(backend), :Mana, ψ; progress)
 end
 
 @fastmath function compute_chunk_mana_qutrits(
