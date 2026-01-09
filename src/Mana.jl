@@ -280,7 +280,7 @@ function phase_space_expectations_fast(ρ::DensityMatrix{T,3}) where {T<:Complex
     N = ρ.n
     M, _ = build_single_qutrit_M()
 
-    v = vec_rho_tensor_N(Matrix{T}(ρ.data), N)   # ensure element type matches T
+    v = vec_rho_tensor_N(ρ.data, N)   # ensure element type matches T
     apply_M_tensor_N_inplace!(v, Matrix{T}(M), N)
     return v
 end
@@ -293,11 +293,11 @@ Compute mana of the density matrix `ρ`.
 Returns `mana = log2(∑|w| / d)` where `w` are the phase-space expectations
 and `d = 3^N` is the Hilbert space dimension.
 """
-function Mana(ρ::StateVec{T,3}) where {T<:Complex}
+function Mana(ρ::DensityMatrix{T,3}) where {T<:Complex}
     N = qudits(ρ) # number of qutrits
     dA = 3^N
 
-    w = phase_space_expectations_fast(ρA)
+    w = phase_space_expectations_fast(ρ)
 
     mana = log2(sum(abs, w) / dA) # mana accumulation
 
