@@ -357,13 +357,19 @@ end
     shm_rank = MPI.Comm_rank(shm_comm)
 
     # Allocate the *full* scratch arrays…
-    TMP = Vector{ComplexF64}(undef, dim)
-    conj_Xloc = Vector{ComplexF64}(undef, dim)
-
-    # initialize them in parallel
-    Threads.@threads for i = 1:dim
-        TMP[i] = ψ[i]
-        conj_Xloc[i] = conj(ψ[i])
+    AA = Vector{Int}(undef, dim)
+    Threads.@threads for i in 1:dim
+        x = i - 1          # 0-based index
+        y = 0
+        pow = 1
+        @inbounds for _ in 1:L
+            d = x % 3
+            x ÷= 3
+            nd = (3 - d) % 3 # 0 -> 0, 1 -> 2, 2 -> 1
+            y += nd * pow
+            pow *= 3
+        end
+        @inbounds AA[i] = y + 1 # back to 1-based
     end
 
     # One `inV` per thread (thread-local scratch)
@@ -384,8 +390,7 @@ end
             ψ,
             Zwhere,
             XTAB,
-            TMP,
-            conj_Xloc,
+            AA,
             scratch_inV[tid],
             pbar,
             stride,

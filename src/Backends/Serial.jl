@@ -117,12 +117,19 @@ function Mana(ψ; progress = true)
     XTAB, Zwhere = generate_gray_table(L, 3)
 
     # Allocate all the necessary arrays
-    TMP = Vector{ComplexF64}(undef, dim)
-    conj_Xloc = Vector{ComplexF64}(undef, dim)
-
-    for i = 1:dim
-        TMP[i] = ψ[i]
-        conj_Xloc[i] = conj(ψ[i])
+    AA = Vector{Int}(undef, dim)
+    @inbounds for i in 1:dim
+        x = i - 1
+        y = 0
+        pow = 1
+        for _ in 1:L
+            d = x % 3
+            x ÷= 3
+            nd = (3 - d) % 3   # 0->0, 1->2, 2->1  (swap 1<->2)
+            y += nd * pow
+            pow *= 3
+        end
+        AA[i] = y + 1
     end
 
     inV = zeros(ComplexF64, dim)
@@ -130,7 +137,7 @@ function Mana(ψ; progress = true)
     pbar = progress ? HadaMAG.CounterProgress(size(XTAB, 2); hz = 8) : HadaMAG.NoProgress()
     progress_stride = progress ? max(div(size(XTAB, 2), 100), 10) : 0 # update ~100 times
 
-    p2SAM = HadaMAG.compute_chunk_mana_qutrits(1, dim, ψ, Zwhere, XTAB, TMP, conj_Xloc, inV, pbar, progress_stride)
+    p2SAM = HadaMAG.compute_chunk_mana_qutrits(1, dim, ψ, Zwhere, XTAB, AA, inV, pbar, progress_stride)
 
     return log2(p2SAM)/log2(3.0)
 end

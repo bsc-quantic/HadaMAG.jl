@@ -22,14 +22,15 @@ end
     ψ::StateVec{ComplexF64,3},
     Zwhere::Vector{Int},
     XTAB::Matrix{Int},
-    TMP::Vector{ComplexF64},
-    conj_Xloc::Vector{ComplexF64},
+    AA::Vector{Int},
     inV::Vector{ComplexF64},
     pbar::AbstractProgress,
     stride::Int,
 )::Float64
     L = qudits(ψ)
     dim = 3^L
+    invdim = 1.0 / dim
+
     cnt = 0
 
     # Build initial permutation for column istart (apply each site's k)
@@ -55,8 +56,10 @@ end
             end
         end
 
-        @simd for i in 1:dim
-            @inbounds inV[i] = conj_Xloc[i] * TMP[perm[i]]
+        @simd for r in 1:dim
+            a = ψ[perm[r]]
+            b = ψ[perm[AA[r]]]
+            inV[r] = conj(a) * (b * invdim)
         end
 
         fast_hadamard_qutrit!(inV)
@@ -76,7 +79,7 @@ end
 
             # how much did that digit change? (must be 1 or 2 for a valid ternary Gray step)
             kstep = mod(XTAB[s, ix+1] - XTAB[s, ix], 3)
-            @assert kstep == 1 || kstep == 2
+            @assert kstep == 1
 
             rotate_perm_site!(perm, s, kstep)
         end
