@@ -390,7 +390,7 @@ function compute_chunk_sre(
             end
         else
             # Subsequent ix: flip a single site relative to previous mask
-            site = Zwhere[ix-1] - 1  # your data is 1-based sites
+            site = Zwhere[ix-1] - 1 # since Zwhere is 1-based
             mask = flip_and_update_mask!(site, dim, mask, TMP1, TMP2, X1, X2, inVR)
         end
 
@@ -475,7 +475,7 @@ function compute_chunk_sre(
             end
         else
             # Subsequent ix: flip a single site relative to previous mask
-            site = Zwhere[ix-1] - 1  # your data is 1-based sites
+            site = Zwhere[ix-1] - 1 # since Zwhere is 1-based
             mask = flip_and_update_mask!(site, dim, mask, TMP1, TMP2, X1, X2, inVR)
         end
 
