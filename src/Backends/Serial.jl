@@ -10,13 +10,13 @@ function SRE(ψ, q; progress = true)
 
     XTAB, Zwhere = generate_gray_table(L, 2)
 
-    # Allocate the *full* scratch arrays…
+    # Allocate all the necessary arrays
     TMP1 = Vector{Float64}(undef, dim)
     TMP2 = Vector{Float64}(undef, dim)
     Xloc1 = Vector{Float64}(undef, dim)
     Xloc2 = Vector{Float64}(undef, dim)
 
-    # … and initialize them in parallel
+    # Precompute Xloc1, Xloc2, TMP1, TMP2
     Threads.@threads for i = 1:dim
         r = real(ψ[i])
         im = imag(ψ[i])

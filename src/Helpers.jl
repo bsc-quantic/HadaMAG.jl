@@ -238,7 +238,7 @@ end
     fast_hadamard_qutrit!(ψ::AbstractVector{Complex{T}}) where T<:Real
 
 In‐place generalized Hadamard (H₃) on each of the log₃(length(ψ)) qutrits
-encoded in the state‐vector `ψ`.  After calling, ψ → (H₃ ⊗ H₃ ⊗ …)·ψ.
+encoded in the state‐vector `ψ`.  After calling the function, ψ → (H₃ ⊗ H₃ ⊗ ...)·ψ.
 
 Throws if `length(ψ)` isn’t exactly 3ⁿ for some integer n.
 """

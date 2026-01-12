@@ -115,7 +115,7 @@ function rand_haar(n::Int; depth::Int, q::Int = 2, rng::AbstractRNG = Random.GLO
 
     dim = q^n
     vec = zeros(ComplexF64, dim)
-    vec[1] = 1.0               # |0…0⟩
+    vec[1] = 1.0 # Initialize to |0...0⟩ state
     normalize!(vec)
 
     apply_brick_wall_haar!(vec, n, depth, rng; q = q)
@@ -144,7 +144,7 @@ function apply_brick_wall_cliff!(
 )
     """
     Apply a brick-wall pattern of Clifford gates to `state`.
-    The circuit has `depth` layers; odd layers act on qubits (1,2),(3,4)…, even on (2,3),(4,5)…
+    The circuit has `depth` layers; odd layers act on qubits (1,2),(3,4),...; even on (2,3),(4,5),...
     """
     @assert length(state) == (1 << nqubits) "apply_brick_wall_cliff only supports qubit state vectors of length 2^n"
 
@@ -171,7 +171,7 @@ function apply_brick_wall_cliff!(
     gates = vcat(one_gates, two_gates)
 
     for layer = 1:depth
-        # choose starting qubit: 1→(1,2),(3,4)… ; 2→(2,3),(4,5)…
+        # choose starting qubit: 1→(1,2),(3,4),... ; 2→(2,3),(4,5),...
         start = isodd(layer) ? 1 : 2
         for q = start:2:(nqubits-1)
             gate = rand(rng, gates)
@@ -189,7 +189,7 @@ end
     apply_brick_wall_haar!(state::AbstractVector{ComplexF64}, nqubits::Integer, depth::Integer; rng::AbstractRNG = Random.GLOBAL_RNG)
 
 Apply an in-place “brick-wall” of Haar-random 2-qubit unitaries to `state`.
-The circuit has `depth` layers; odd layers act on qubits (1,2),(3,4)…, even on (2,3),(4,5)…
+The circuit has `depth` layers; odd layers act on qubits (1,2),(3,4),...; even on (2,3),(4,5),...
 
 # Arguments
 - `state`: length-2^nqubits state vector (will be mutated).
