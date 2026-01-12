@@ -29,15 +29,31 @@ julia> ψ = StateVec(amplitudes)
 StateVec{ComplexF64,2}(n=4, dim=16, mem=296.0 B)
 
 julia> ρA = reduced_density_matrix(ψ, 2; side=:right)
-DensityMatrix{ComplexF64,2}(n=2, dim=4, mem=304.0 B)
+DensityMatrix{ComplexF64,2}(n=2, size=(4, 4), mem=304.0 B)
 ```
 
 ### Sampling Haar-random states
-Generate a Haar-random state on `n` qubits, using `depth` layers of random 2-qubit gates:
+`HadaMAG.jl` provides the `rand_haar` function to generate Haar-random pure states, by applying random 2-qudit gates in a brickwall pattern with an specified `depth`.
+For example, let's generate a Haar-random state on `N=4` qubits, using `depth=3` layers of random 2-qubit gates:
 
 ```julia
-julia> ψ = rand_haar(4; depth=3)
-StateVec{Float64,2}(n=4, dim=16, mem=...)
+julia> using HadaMAG
+
+julia> N = 4
+4
+
+julia> depth = 3
+3
+
+julia> ψ = rand_haar(N; depth)
+StateVec{ComplexF64,2}(n=4, dim=16, mem=296.0 B)
+```
+
+You can also generate Haar-random states for qutrits:
+
+```julia
+julia> ψ_qutrit = rand_haar(3; q=3, depth=2)
+StateVec{ComplexF64,3}(n=3, dim=27, mem=472.0 B)
 ```
 
 ## Loading a state vector from disk

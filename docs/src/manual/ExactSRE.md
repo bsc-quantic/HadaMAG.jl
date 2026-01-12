@@ -25,7 +25,18 @@ julia> SRE(ψ, 2; backend = :serial)
 (6.0095727675204405, 6.661338147750939e-16)
 ```
 
-In each call you get a tuple `(entropy, lost_norm)`, where `lost_norm` is the numerical deviation from unit norm after applying the algorithm.
+In each call you get a tuple `(entropy, lost_norm)`, where `lost_norm` is the numerical deviation (in absolute value) from unit norm after applying the algorithm.
+
+## Backends
+
+The `backend` keyword argument lets you choose the execution engine. The available backends for `SRE` are:
+- `:serial`: Single-threaded CPU execution.
+- `:threads`: Multi-threaded CPU execution using Julia `Threads`.
+- `:mpi`: Hybrid MPI + threads execution (requires `MPI.jl`).
+- `cuda`: GPU execution using CUDA (requires `HadaMAGCUDAExt.jl`).
+- `mpi_cuda`: Hybrid MPI + GPU execution (requires both `MPI.jl` and `HadaMAGCUDAExt.jl`).
+
+For more details on backend configuration and MPI/CUDA usage, see the [Backend Configuration](Backends.html) guide.
 
 ### API Reference
 
