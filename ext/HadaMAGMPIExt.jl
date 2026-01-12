@@ -11,8 +11,8 @@ Generate the length-`n` binary Gray sequence **slice** for this rank in `comm`.
 
 Internally, the global sequence of size `2^n` is partitioned across all ranks of `comm` (via `HadaMAG.partition_counts`), and each rank locally computes:
 
- 1. `local_codes[j] = k ⊻ (k >> 1)` for its assigned global indices `k = offset, offset+1, …`.
- 2. `local_flips[j]` as the 1‑based bit position that flipped between successive codes—
+ 1. `local_codes[j] = k ⊻ (k >> 1)` for its assigned global indices `k = offset, offset+1, ...`.
+ 2. `local_flips[j]` as the 1‑based bit position that flipped between successive codes,
     including the flip from the preceding rank’s last code into this rank’s first.
 
 This requires only an (O(P)) broadcast of counts/displacements and (O(2^n/P)) local work, with no large scatter.
@@ -179,13 +179,13 @@ end
     shm_comm = MPI.Comm_split_type(comm, MPI.COMM_TYPE_SHARED, rank)
     shm_rank = MPI.Comm_rank(shm_comm)
 
-    # Allocate the *full* scratch arrays…
+    # Allocate all the scratch arrays
     TMP1 = Vector{Float64}(undef, dim)
     TMP2 = Vector{Float64}(undef, dim)
     Xvec1 = Vector{Float64}(undef, dim)
     Xvec2 = Vector{Float64}(undef, dim)
 
-    # … and initialize them in parallel
+    # initialize them in parallel
     Threads.@threads for i = 1:dim
         r = real(ψ[i])
         im = imag(ψ[i])
@@ -200,7 +200,7 @@ end
 
     progress_stride = progress ? max(div(length(XTAB), 100), 10) : 0 # update ~100 times
 
-    # Local threaded work — no copies of TMP1/TMP2
+    # Local threaded work (no copies of TMP1/TMP2)
     PS2, MS2 = threaded_chunk_reduce(
         length(XTAB);
         progress = (progress && rank == 0),
@@ -224,7 +224,6 @@ end
     end
 
     # Pack + intra-node reduction
-    # node_vals = MPI.Allreduce([PS2, MS2], MPI.SUM, shm_comm)
     buf = [PS2, MS2]
     MPI.Allreduce!(buf, MPI.SUM, shm_comm)   # in-place
     node_vals = buf
@@ -242,7 +241,7 @@ end
     p2SAM, m2SAM = Tuple(global_leader)
 
     N = length(data(ψ))
-    return (-log2(m2SAM / N), 1.0 - p2SAM / N)
+    return (-log2(m2SAM / N), abs(1.0 - p2SAM / N))
 end
 
 function MC_SRE(
@@ -277,7 +276,7 @@ function MC_SRE(
         (progress && rank == 0) ?
         HadaMAG.CounterProgress(Nsamples; hz = 8, io = stderr, tty = true) :
         HadaMAG.NoProgress()
-    progress_stride = progress ? max(div(length(Nsamples), 100), 10) : 0 # update ~100 times
+    progress_stride = progress ? max(div(Nsamples, 100), 10) : 0 # update ~100 times
 
     # local β block
     idx_range, _ = scatter_range(Nβ, comm)
@@ -356,10 +355,9 @@ end
     shm_comm = MPI.Comm_split_type(comm, MPI.COMM_TYPE_SHARED, rank)
     shm_rank = MPI.Comm_rank(shm_comm)
 
-    # Allocate the *full* scratch arrays…
     AA = Vector{Int}(undef, dim)
     Threads.@threads for i in 1:dim
-        x = i - 1          # 0-based index
+        x = i - 1 # 0-based index
         y = 0
         pow = 1
         @inbounds for _ in 1:L
@@ -377,7 +375,7 @@ end
 
     progress_stride = progress ? max(div(size(XTAB, 2), 100), 10) : 0 # update ~100 times
 
-    # Local threaded work — no copies of TMP1/TMP2
+    # Local threaded work (no copies of AA)
     p2SAM = threaded_chunk_reduce(
         size(XTAB, 2);
         nout=1,
