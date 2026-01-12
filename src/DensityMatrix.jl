@@ -122,7 +122,3 @@ function reduced_density_matrix(
 
     return DensityMatrix(ρA; q = q)
 end
-
-reduced_density_matrix(ψ::StateVec{Tc,q}, NA::Int; side::Symbol = :right) where {Tc<:Complex,q} =
-    reduced_density_matrix(ψ.data, NA; side = side)
-
