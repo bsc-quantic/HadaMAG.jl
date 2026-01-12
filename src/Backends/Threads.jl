@@ -18,7 +18,7 @@ you can index *thread-local* scratch by `tid`.
 # Arguments
 - `len::Integer`: number of logical items to process.
 - `compute_chunk::Function`: called as compute_chunk(tid::Int, istart::Int, iend::Int, p, stride) (progress-aware).
- It must return a 2-tuple `(a, b)`; all per-thread tuples are reduced by **elementwise sum**.
+ It must return a 2-tuple `(a, b)`, which will be summed elementwise across all threads.
 
 # Keywords
 - `progress::Bool=false`: enable a low-overhead progress indicator.
@@ -32,8 +32,7 @@ you can index *thread-local* scratch by `tid`.
 - `nout::Int=2`: number of output values from `compute_chunk` (must be ≥ 1).
 
 # Returns
-The tuple `(a::Float64, b::Float64)`, elementwise sum of the
-`compute_chunk` results from all threads.
+The tuple `(a::Float64, b::Float64)`, elementwise sum of the `compute_chunk` results from all threads.
 """
 function threaded_chunk_reduce(
     len::Integer,
@@ -132,7 +131,7 @@ function SRE(ψ, q; progress::Bool = true)
 
     progress_stride = progress ? max(div(length(XTAB), 100), 10) : 0 # update ~100 times
 
-    # Local threaded work — no copies of TMP1/TMP2
+    # Local threaded work (no copies of TMP1/TMP2)
     p2SAM, m2SAM = threaded_chunk_reduce(
         length(XTAB);
         progress,
@@ -155,7 +154,7 @@ function SRE(ψ, q; progress::Bool = true)
         )
     end
 
-    return (-log2(m2SAM/dim), abs(1-p2SAM/dim)) # TODO: should we really return 0.0 there?
+    return (-log2(m2SAM/dim), abs(1-p2SAM/dim))
 end
 
 function MC_SRE(
