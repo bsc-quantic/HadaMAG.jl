@@ -1,10 +1,9 @@
 # State representation in `HadaMAG.jl`
 
-In **HadaMAG.jl**, the `StateVec{T,q}` type provides a simple, efficient representation of an $n$-qudit (local dimension $q$) quantum state in the computational basis, with support for constructing from raw amplitude vectors, generating Haar-random states, loading from common on-disk formats and other utilities.
+In **HadaMAG.jl**, the `StateVec{T,q}` type provides a representation of an $n$-qudit quantum state in the computational basis (with local dimension $q$), and offers support for constructing from raw amplitude vectors, generating Haar-random states, loading from common on-disk formats and other utilities.
 
 ## Constructing a `StateVec{T,q}`
-Create from an existing amplitude vector (must have length = $q^n$):
-
+Create a state from an existing amplitude vector of length = $q^n$:
 ```julia
 julia> using HadaMAG
 
@@ -14,7 +13,7 @@ julia> ψ = StateVec(amplitudes) # defaults to q=2 (qubits)
 StateVec{ComplexF64,2}(n=4, dim=16, mem=296.0 B)
 ```
 
-Or specify a non-qubit local dimension:
+Or specify a non-qubit local dimension `q` (e.g., for qutrits, `q=3`):
 ```julia
 julia> amplitudes = randn(ComplexF64, 3^3);
 
