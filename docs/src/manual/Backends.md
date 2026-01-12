@@ -144,8 +144,8 @@ julia> SRE(ψ, 2; backend = :cuda, progress=false, batch=batch_size, threads=nth
 ```
 
 ### Multi-GPU with MPI + CUDA
-`HadaMAG.jl` also supports hybrid MPI + CUDA execution for multi-GPU systems. To use it, you need to have both `MPI.jl` and `CUDA.jl` loaded in your session.
-Then you can call `SRE` with `backend = :mpi_cuda`, and use it similarly to the MPI example above:
+`HadaMAG.jl` also supports hybrid MPI + CUDA execution for multi-GPU systems. The MPI + CUDA backend is only available for the `SRE` function at the moment. To use it, you need to have both `MPI.jl` and `CUDA.jl` loaded in your session.
+After that, you can call `SRE` with `backend = :mpi_cuda`, and use it similarly to the MPI example above:
 ```julia
 using HadaMAG
 using MPI
@@ -167,11 +167,4 @@ if rank == 0
     println("SRE(ψ, 2) = ", m2)
     println("Lost norm: ", lost_norm)
 end
-```
-
-#### API Reference
-```@docs
-HadaMAG.Serial
-HadaMAG.Threaded
-HadaMAG.MPIThreads
 ```
