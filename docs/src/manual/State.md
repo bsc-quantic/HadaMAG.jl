@@ -31,9 +31,9 @@ julia> ρA = reduced_density_matrix(ψ, 2; side=:right)
 DensityMatrix{ComplexF64,2}(n=2, size=(4, 4), mem=304.0 B)
 ```
 
-### Sampling Haar-random states
-`HadaMAG.jl` provides the `rand_haar` function to generate Haar-random pure states, by applying random 2-qudit gates in a brickwall pattern with an specified `depth`.
-For example, let's generate a Haar-random state on `N=4` qubits, using `depth=3` layers of random 2-qubit gates:
+### Generating quantum circuit states
+`HadaMAG.jl` provides the `rand_haar` function to generate pure states obtained with quantum circuits from computational basis state, by applying Haar random 2-qudit gates in a brickwall pattern with an specified `depth`.
+For example, let's generate a state on `N=4` qubits, corresponding to `depth=3` layers of random 2-qubit gates:
 
 ```julia
 julia> using HadaMAG
@@ -48,7 +48,7 @@ julia> ψ = rand_haar(N; depth)
 StateVec{ComplexF64,2}(n=4, dim=16, mem=296.0 B)
 ```
 
-You can also generate Haar-random states for qutrits:
+You can also generate states evolved with quantum circuits for qutrits:
 
 ```julia
 julia> ψ_qutrit = rand_haar(3; q=3, depth=2)
