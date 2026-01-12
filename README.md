@@ -71,7 +71,7 @@ DensityMatrix{ComplexF64,3}(n=6, size=(729, 729), mem=8.11 MiB)
 
 # Compute the mana of the mixed state
 julia> mana_mixed = Mana(ρA)
-3.5551656874727082```
+3.5551656874727082
 ```
 
 ### Backends
@@ -86,9 +86,9 @@ julia> mana_mixed = Mana(ρA)
 By default, `backend = :auto` selects the fastest available backend.
 For more details on configuring and using backends, see the [Backend Configuration guide](https://bsc-quantic.github.io/HadaMAG.jl/dev/manual/Backends/).
 
-## Documentation
+### Documentation
 Full documentation is available at [HadaMAG.jl Documentation](https://bsc-quantic.github.io/HadaMAG.jl/dev/).
 
-## Acknowledgements
+### Acknowledgements
 
 `HadaMAG.jl` uses the [FFHT](https://github.com/FALCONN-LIB/FFHT) C library for efficient bit‐reversed Fast Hadamard Transforms.
