@@ -10,7 +10,7 @@ function split_ranges(N::Int, k::Int)
     q, r = divrem(N, k)
     ranges = Vector{UnitRange{Int}}(undef, k)
     start = 1
-    for i in 1:k
+    for i = 1:k
         len = q + (i <= r ? 1 : 0)
         stop = start + len - 1
         ranges[i] = start:stop
@@ -24,7 +24,7 @@ function split_range_into_subranges(r::UnitRange{Int}, parts::Int)
     # split_ranges already balances 1:length(r)
     loc = split_ranges(length(r), parts)
     base = first(r) - 1
-    return [(base + first(rr)):(base + last(rr)) for rr in loc ]
+    return [(base+first(rr)):(base+last(rr)) for rr in loc]
 end
 
 function SRE(ψ, q::Val{Q}; progress = false, batch::Int = 128, threads::Int = 256) where {Q}
@@ -47,7 +47,7 @@ function SRE(ψ, q::Val{Q}; progress = false, batch::Int = 128, threads::Int = 2
 
     # Split masks across MPI ranks (nodes)
     global_ranges = split_ranges(nMasks, nprocs)
-    r_global = global_ranges[rank + 1]   # Julia is 1-based
+    r_global = global_ranges[rank+1]   # Julia is 1-based
 
     # GPUs visible on THIS rank/node
     devs = collect(CUDA.devices())
@@ -60,12 +60,13 @@ function SRE(ψ, q::Val{Q}; progress = false, batch::Int = 128, threads::Int = 2
     workspaces = Vector{HadaMAGCUDAExt.SREChunkWorkspace}(undef, ngpu)
     for (i, dev) in enumerate(devs)
         CUDA.device!(dev)
-        workspaces[i] = HadaMAGCUDAExt.SREChunkWorkspace(ψ; max_batch=batch, threads=threads)
+        workspaces[i] =
+            HadaMAGCUDAExt.SREChunkWorkspace(ψ; max_batch = batch, threads = threads)
     end
 
     partials = Vector{Tuple{Float64,Float64}}(undef, local_ngpu)
 
-    Threads.@sync for i in 1:local_ngpu
+    Threads.@sync for i = 1:local_ngpu
         dev = devs[i]
         r_sub = subranges[i]
         ws = workspaces[i]
@@ -75,8 +76,10 @@ function SRE(ψ, q::Val{Q}; progress = false, batch::Int = 128, threads::Int = 2
 
             p2_i, mq_i = HadaMAGCUDAExt.compute_chunk_sre_cuda_batched!(
                 ws,
-                first(r_sub), last(r_sub),
-                Zwhere, XTAB;
+                first(r_sub),
+                last(r_sub),
+                Zwhere,
+                XTAB;
                 q = q,
                 batch = batch,
                 threads = threads,

@@ -90,7 +90,7 @@ this will call through your `.so` instead of the default JLL library.
 call_fht!(vec::Vector{Float64}, L::Int32) = (_fht_fn[])(vec, L)
 
 """
-    haar_random_unitary(n_qubits::Integer, rng::AbstractRNG = Random.GLOBAL_RNG)
+    haar_random_unitary(q::Int, n_qudits::Integer, rng::AbstractRNG = Random.GLOBAL_RNG)
 
 Generate a Haar-distributed random unitary matrix of size q^n_qudits × q^n_qudits.
 
@@ -99,8 +99,13 @@ Generate a Haar-distributed random unitary matrix of size q^n_qudits × q^n_qudi
 - `n_qudits::Integer`: number of qubits; the output U lives in U(2^n_qubits).
 - `rng::AbstractRNG`: random number generator (defaults to `GLOBAL_RNG`).
 """
-function haar_random_unitary(q::Integer, n_qudits::Integer, rng::AbstractRNG = Random.GLOBAL_RNG)
-    q in (2, 3) || throw(ArgumentError("haar_random_unitary: only q=2 and q=3 are implemented"))
+function haar_random_unitary(
+    q::Integer,
+    n_qudits::Integer,
+    rng::AbstractRNG = Random.GLOBAL_RNG,
+)
+    q in (2, 3) ||
+        throw(ArgumentError("haar_random_unitary: only q=2 and q=3 are implemented"))
     N = q^n_qudits
 
     # draw complex Gaussian matrix

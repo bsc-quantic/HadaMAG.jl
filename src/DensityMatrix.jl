@@ -27,8 +27,8 @@ Throws `ArgumentError` if `mat` is not square or if its size is not an exact pow
 - A [`DensityMatrix`](@ref) containing a copy of `mat` and inferred `n` & `q`.
 """
 function DensityMatrix(mat::AbstractMatrix{T}; q::Int = 2) where {T}
-    size(mat,1) == size(mat,2) || throw(ArgumentError("DensityMatrix must be square"))
-    n, ispow = _power_q(size(mat,1), q)
+    size(mat, 1) == size(mat, 2) || throw(ArgumentError("DensityMatrix must be square"))
+    n, ispow = _power_q(size(mat, 1), q)
     ispow || throw(ArgumentError("size(mat,1)=$(size(mat,1)) is not a power of q=$q"))
     return DensityMatrix{T,q}(Matrix{T}(mat), n, q)
 end
@@ -38,7 +38,7 @@ qudit_dim(ρ::DensityMatrix{T,q}) where {T,q} = ρ.q
 data(ρ::DensityMatrix) = ρ.data
 
 Base.size(ρ::DensityMatrix) = size(ρ.data)
-Base.getindex(ρ::DensityMatrix, i::Int, j::Int) = ρ.data[i,j]
+Base.getindex(ρ::DensityMatrix, i::Int, j::Int) = ρ.data[i, j]
 
 # Pretty-print summary in the REPL
 function Base.show(io::IO, ::MIME"text/plain", s::DensityMatrix)
@@ -65,8 +65,8 @@ function Base.show(io::IO, ::MIME"text/plain", s::DensityMatrix)
         "}",
         "(n=",
         s.n,
-        ", dim=",
-        length(s.data),
+        ", size=",
+        size(s.data),
         ", mem=",
         memstr,
         ")",

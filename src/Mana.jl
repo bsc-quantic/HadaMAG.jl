@@ -35,7 +35,7 @@ end
 
     # Build initial permutation for column istart (apply each site's k)
     perm = collect(1:dim)
-    @inbounds for s in 1:L
+    @inbounds for s = 1:L
         k = XTAB[s, istart] % 3
         if k == 1
             rotate_perm_site!(perm, s, 1)
@@ -56,7 +56,7 @@ end
             end
         end
 
-        @simd for r in 1:dim
+        @simd for r = 1:dim
             a = ψ[perm[r]]
             b = ψ[perm[AA[r]]]
             inV[r] = conj(a) * (b * invdim)
@@ -65,11 +65,11 @@ end
         fast_hadamard_qutrit!(inV)
 
         # Compensated accumulation of sum(abs(inV[i])).
-        for i in 1:dim
+        for i = 1:dim
             ap = abs(inV[i])
-            y  = ap - c
-            t  = p2SAM + y
-            c  = (t - p2SAM) - y
+            y = ap - c
+            t = p2SAM + y
+            c = (t - p2SAM) - y
             p2SAM = t
         end
 
@@ -82,6 +82,7 @@ end
             @assert kstep == 1
 
             rotate_perm_site!(perm, s, kstep)
+            # rotate_perm_site!(perm, s, 1)
         end
     end
 
@@ -96,9 +97,9 @@ end
 @inline function rotate_perm_site!(perm::Vector{Int}, site::Int, k::Int)
     @assert k==1 || k==2
     stride = Int(3)^(site-1)
-    block  = 3*stride
+    block = 3*stride
     @inbounds for bs = 1:block:length(perm)
-        @simd for off = 0:stride-1
+        @simd for off = 0:(stride-1)
             i0 = bs + off
             i1 = i0 + stride
             i2 = i1 + stride
@@ -118,8 +119,6 @@ Return `(M, A_list)` where:
 - `A_list[idx]` is the 3×3 phase-point operator A_u (u ≡ idx in 0..8),
 - `M` is 9×9 such that for one qutrit: `w = M * vec(ρ)` (column-major vec)
     and `w[idx] = tr(A_list[idx] * ρ)`.
-
-This matches the C++ construction exactly (including the use of vec(A_u^T) as rows of M).
 """
 function build_single_qutrit_M()
     d = 3
@@ -129,14 +128,14 @@ function build_single_qutrit_M()
 
     # Shift X
     X = zeros(ComplexF64, d, d)
-    for k in 0:d-1
-        X[(k + 1) % d + 1, k + 1] = 1.0 + 0im
+    for k = 0:(d-1)
+        X[(k+1)%d+1, k+1] = 1.0 + 0im
     end
 
     # Clock Z
     Z = zeros(ComplexF64, d, d)
-    for k in 0:d-1
-        Z[k + 1, k + 1] = ω^k
+    for k = 0:(d-1)
+        Z[k+1, k+1] = ω^k
     end
 
     # Precompute powers: I, A, A^2
@@ -147,13 +146,13 @@ function build_single_qutrit_M()
     two_inv = 2  # inverse of 2 mod 3
 
     # T_{a,ap}
-    T_list = [zeros(ComplexF64, d, d) for _ in 1:num_ops]
-    for a in 0:d-1
-        for ap in 0:d-1
+    T_list = [zeros(ComplexF64, d, d) for _ = 1:num_ops]
+    for a = 0:(d-1)
+        for ap = 0:(d-1)
             idx = a * 3 + ap  # 0..8
             exponent = mod(-two_inv * a * ap, d)  # 0..2
             phase = ω^exponent
-            T_list[idx + 1] .= phase .* (Zpow[a + 1] * Xpow[ap + 1])
+            T_list[idx+1] .= phase .* (Zpow[a+1] * Xpow[ap+1])
         end
     end
 
@@ -165,15 +164,15 @@ function build_single_qutrit_M()
     A0 ./= d
 
     # A_u = T_u A0 T_u^†
-    A_list = [zeros(ComplexF64, d, d) for _ in 1:num_ops]
-    for idx in 1:num_ops
+    A_list = [zeros(ComplexF64, d, d) for _ = 1:num_ops]
+    for idx = 1:num_ops
         Tu = T_list[idx]
         A_list[idx] .= Tu * A0 * Tu'   # ' is adjoint in Julia
     end
 
     # Build M (9×9): row idx is vec_col(A_u^T)
     M = zeros(ComplexF64, num_ops, num_ops)
-    for idx in 1:num_ops
+    for idx = 1:num_ops
         Au = A_list[idx]
         # vec(transpose(Au)) is column-major vec of Au^T (NO conjugation)
         M[idx, :] .= vec(transpose(Au))
@@ -182,14 +181,11 @@ function build_single_qutrit_M()
     return M, A_list
 end
 
-# ---------- Tensor-product-compatible vec for N qutrits ----------
 """
     vec_rho_tensor_N(ρ::AbstractMatrix, N::Int)
 
 Map a 3^N×3^N density matrix `ρ` (column-major) to a vector `v` of length 9^N
 such that each site contributes an index idx9 = 3*i_k + j_k.
-
-This matches the C++ digit convention: the vector legs are ordered MSB→LSB in base-3.
 """
 function vec_rho_tensor_N(ρ::AbstractMatrix{Tc}, N::Int) where {Tc<:Complex}
     d = 3
@@ -203,28 +199,28 @@ function vec_rho_tensor_N(ρ::AbstractMatrix{Tc}, N::Int) where {Tc<:Complex}
     i_digits = Vector{Int}(undef, N)
     j_digits = Vector{Int}(undef, N)
 
-    @inbounds for c0 in 0:dim-1
+    @inbounds for c0 = 0:(dim-1)
         tmpc = c0
-        for k in N:-1:1
+        for k = N:-1:1
             j_digits[k] = tmpc % d
             tmpc ÷= d
         end
 
-        for r0 in 0:dim-1
+        for r0 = 0:(dim-1)
             tmpr = r0
-            for k in N:-1:1
+            for k = N:-1:1
                 i_digits[k] = tmpr % d
                 tmpr ÷= d
             end
 
             p = 0
-            for k in 1:N
+            for k = 1:N
                 idx9 = i_digits[k] * 3 + j_digits[k]  # 0..8
                 p = p * 9 + idx9
             end
 
             # Julia is 1-based; ρ is a Matrix so ρ[r0+1, c0+1] matches column-major storage
-            v[p + 1] = ρ[r0 + 1, c0 + 1]
+            v[p+1] = ρ[r0+1, c0+1]
         end
     end
 
@@ -237,40 +233,45 @@ end
 In-place apply `M^{⊗N}` to `v` (length 9^N), sweeping legs where each leg has dimension 9.
 Leg 1 corresponds to the most significant base-9 digit.
 """
-function apply_M_tensor_N_inplace!(v::AbstractVector{Tc}, M::AbstractMatrix{Tc}, N::Int) where {Tc<:Complex}
+function apply_M_tensor_N_inplace!(
+    v::AbstractVector{Tc},
+    M::AbstractMatrix{Tc},
+    N::Int,
+) where {Tc<:Complex}
     local_dim = 9
     total_dim = length(v)
     total_dim == ipow(local_dim, N) || throw(ArgumentError("length(v) must be 9^N"))
-    size(M,1) == local_dim && size(M,2) == local_dim || throw(ArgumentError("M must be 9×9"))
+    size(M, 1) == local_dim && size(M, 2) == local_dim ||
+        throw(ArgumentError("M must be 9×9"))
 
     x = Vector{Tc}(undef, local_dim)
     y = Vector{Tc}(undef, local_dim)
 
-    @inbounds for leg in 1:N
+    @inbounds for leg = 1:N
         stride = ipow(local_dim, N - leg)
         block_size = stride * local_dim
         num_blocks = total_dim ÷ block_size
 
-        for b in 0:num_blocks-1
+        for b = 0:(num_blocks-1)
             base = b * block_size
-            for ofs in 0:stride-1
+            for ofs = 0:(stride-1)
                 # gather
-                for a in 0:local_dim-1
+                for a = 0:(local_dim-1)
                     idx = base + ofs + a * stride
-                    x[a + 1] = v[idx + 1]
+                    x[a+1] = v[idx+1]
                 end
                 # y = M * x
-                for r in 1:local_dim
+                for r = 1:local_dim
                     s = zero(Tc)
-                    @simd for c in 1:local_dim
+                    @simd for c = 1:local_dim
                         s += M[r, c] * x[c]
                     end
                     y[r] = s
                 end
                 # scatter back
-                for a in 0:local_dim-1
+                for a = 0:(local_dim-1)
                     idx = base + ofs + a * stride
-                    v[idx + 1] = y[a + 1]
+                    v[idx+1] = y[a+1]
                 end
             end
         end
@@ -283,10 +284,6 @@ end
     phase_space_expectations_fast(ρ::DensityMatrix{<:Complex,3})
 
 Return the length-9^N vector of phase-space expectation values for an N-qutrit density matrix ρ.
-
-This matches the C++ pipeline:
-v = vec_rho_tensor_N(ρ)
-v ← (M^{⊗N}) v
 """
 function phase_space_expectations_fast(ρ::DensityMatrix{T,3}) where {T<:Complex}
     N = ρ.n
@@ -298,14 +295,14 @@ function phase_space_expectations_fast(ρ::DensityMatrix{T,3}) where {T<:Complex
 end
 
 """
-    mana(ρ::DensityMatrix{<:Complex,3})
+    Mana(ρ::DensityMatrix{<:Complex,3})
 
-Compute mana of the density matrix `ρ`.
+Compute the Mana of a density matrix `ρ` of a qutrit system.
 
-Returns `mana = log2(∑|w| / d)` where `w` are the phase-space expectations
-and `d = 3^N` is the Hilbert space dimension.
+# Arguments
+- `ρ`: A [`DensityMatrix`](@ref) object representing the quantum state.
 """
-function Mana(ρ::DensityMatrix{T,3}) where {T<:Complex}
+function Mana(ρ::DensityMatrix{T,3}; kwargs...) where {T<:Complex}
     N = qudits(ρ) # number of qutrits
     dA = 3^N
 

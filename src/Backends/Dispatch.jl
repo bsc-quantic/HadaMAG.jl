@@ -54,21 +54,37 @@ _apply_backend(::MPIThreads, fsym, args...; kw...) =
     if !isnothing(Base.get_extension(HadaMAG, :HadaMAGMPIExt))
         getfield(Base.get_extension(HadaMAG, :HadaMAGMPIExt), fsym)(args...; kw...)
     else
-        throw(ArgumentError("MPI backend unavailable, ensure MPI.jl is loaded (`using MPI` first)"))
+        throw(
+            ArgumentError(
+                "MPI backend unavailable, ensure MPI.jl is loaded (`using MPI` first)",
+            ),
+        )
     end
 
 _apply_backend(::CUDAThreads, fsym, args...; kw...) =
     if !isnothing(Base.get_extension(HadaMAG, :HadaMAGCUDAExt))
         getfield(Base.get_extension(HadaMAG, :HadaMAGCUDAExt), fsym)(args...; kw...)
     else
-        throw(ArgumentError("CUDA backend unavailable, ensure CUDA.jl is loaded (`using CUDA` first)"))
+        throw(
+            ArgumentError(
+                "CUDA backend unavailable, ensure CUDA.jl is loaded (`using CUDA` first)",
+            ),
+        )
     end
 
 _apply_backend(::MPICUDAThreads, fsym, args...; kw...) =
     if isnothing(Base.get_extension(HadaMAG, :HadaMAGMPIExt))
-        throw(ArgumentError("MPI+CUDA backend unavailable, ensure MPI.jl is loaded (`using MPI` first)"))
+        throw(
+            ArgumentError(
+                "MPI+CUDA backend unavailable, ensure MPI.jl is loaded (`using MPI` first)",
+            ),
+        )
     elseif isnothing(Base.get_extension(HadaMAG, :HadaMAGCUDAExt))
-        throw(ArgumentError("MPI+CUDA backend unavailable, ensure CUDA.jl is loaded (`using CUDA` first)"))
+        throw(
+            ArgumentError(
+                "MPI+CUDA backend unavailable, ensure CUDA.jl is loaded (`using CUDA` first)",
+            ),
+        )
     else
         getfield(Base.get_extension(HadaMAG, :HadaMAGMPICUDAExt), fsym)(args...; kw...)
     end

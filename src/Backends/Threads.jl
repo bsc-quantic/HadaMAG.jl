@@ -51,8 +51,9 @@ function threaded_chunk_reduce(
     # Accumulate per-thread results in a dense matrix (nout × nthr)
     acc = zeros(Float64, nout, nthr)
 
-    p = progress ? HadaMAG.CounterProgress(len; hz = hz, io = io, tty = true) :
-                   HadaMAG.NoProgress()
+    p =
+        progress ? HadaMAG.CounterProgress(len; hz = hz, io = io, tty = true) :
+        HadaMAG.NoProgress()
 
     # tiny adaptor (keeps your 5-arg signature)
     @inline function call_chunk(f, tid, istart, iend)
@@ -63,7 +64,7 @@ function threaded_chunk_reduce(
         end
     end
 
-    Threads.@threads :static for tid in 1:nthr
+    Threads.@threads :static for tid = 1:nthr
         istart = tdisp[tid] + 1
         iend = tdisp[tid] + tcnt[tid]
 
@@ -226,11 +227,11 @@ function Mana(ψ; progress::Bool = true)
     XTAB, Zwhere = HadaMAG.generate_general(L, 3)
 
     AA = Vector{Int}(undef, dim)
-    Threads.@threads for i in 1:dim
-        x = i - 1          # 0-based index
+    Threads.@threads for i = 1:dim
+        x = i - 1 # 0-based index
         y = 0
         pow = 1
-        @inbounds for _ in 1:L
+        @inbounds for _ = 1:L
             d = x % 3
             x ÷= 3
             nd = (3 - d) % 3 # 0 -> 0, 1 -> 2, 2 -> 1
@@ -248,7 +249,7 @@ function Mana(ψ; progress::Bool = true)
     # Local threaded work — no copies of TMP1/TMP2
     p2SAM = threaded_chunk_reduce(
         size(XTAB, 2);
-        nout=1,
+        nout = 1,
         progress,
         progress_stride,
     ) do tid, istart, iend, pbar, stride

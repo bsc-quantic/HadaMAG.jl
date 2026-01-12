@@ -75,7 +75,7 @@ the beginning of each chunk (e.g. per-rank masked FHT sweeps).
 """
 @fastmath function generate_binary_splitted(n::Int, rank::Int, P::Int)
     @assert 0 ≤ rank < P
-    N  = Int(1) << n              # total number of Gray codes
+    N = Int(1) << n              # total number of Gray codes
 
     # Partition codes [0, N) across ranks
     code_counts, code_displs = HadaMAG.partition_counts(N, P)
@@ -212,11 +212,11 @@ q-ary Gray walks that restart from a known state at the beginning of each chunk.
 
     # ── partition codes [0, N) exactly like in the binary version ───────────
     code_counts, code_displs = HadaMAG.partition_counts(N, P)
-    code_off = code_displs[rank + 1]   # 0-based
-    code_cnt = code_counts[rank + 1]
+    code_off = code_displs[rank+1]   # 0-based
+    code_cnt = code_counts[rank+1]
 
     # ── preallocate local matrix and flips ───────────────────────────────────
-    local_XTAB  = Matrix{Int}(undef, n, code_cnt)
+    local_XTAB = Matrix{Int}(undef, n, code_cnt)
 
     # 1) build local columns (Gray codes for this chunk)
     @inbounds for j = 1:code_cnt
@@ -227,14 +227,14 @@ q-ary Gray walks that restart from a known state at the beginning of each chunk.
     end
 
     # 2) local flips: only internal transitions within this chunk
-    flip_cnt   = max(code_cnt - 1, 0)
+    flip_cnt = max(code_cnt - 1, 0)
     local_flips = Vector{Int}(undef, flip_cnt)
 
     @inbounds for j = 1:flip_cnt
         # first position i where column j and j+1 differ
         pos = 0
         for i = 1:n
-            if local_XTAB[i, j] != local_XTAB[i, j + 1]
+            if local_XTAB[i, j] != local_XTAB[i, j+1]
                 pos = i
                 break
             end
