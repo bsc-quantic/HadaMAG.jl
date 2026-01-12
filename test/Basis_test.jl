@@ -30,7 +30,7 @@
 
                 N = Int(1) << n
 
-                all_codes   = UInt64[]
+                all_codes = UInt64[]
                 total_flips = 0
 
                 for rank = 0:(P-1)
@@ -140,7 +140,7 @@
 
                     # copy local codes into the global matrix at the correct positions
                     if code_cnt > 0
-                        @inbounds all_XTAB[:, code_off+1 : code_off+code_cnt] = local_XTAB
+                        @inbounds all_XTAB[:, (code_off+1):(code_off+code_cnt)] = local_XTAB
                     end
 
                     total_flips += length(local_flips)

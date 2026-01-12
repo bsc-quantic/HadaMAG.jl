@@ -42,7 +42,6 @@ function MC_SRE(
     _apply_backend(_choose_backend(backend), :MC_SRE, ψ, q, Nβ, Nsamples; seed, progress)
 end
 
-
 """
     SRE2(ψ::StateVec{T,2}; backend = :auto, progress = true)
 
@@ -73,7 +72,13 @@ Returns the SRE value and the lost norm of the state vector.
 - `backend`: The backend to use for the computation. Default is `:auto`, which selects the best available backend.
 - `progress`: Whether to show a progress bar. Default to `true`.
 """
-function SRE(ψ::StateVec{T,2}, q::Number; backend = :auto, progress = true, kwargs...) where {T}
+function SRE(
+    ψ::StateVec{T,2},
+    q::Number;
+    backend = :auto,
+    progress = true,
+    kwargs...,
+) where {T}
     _apply_backend(_choose_backend(backend), :SRE, ψ, q; progress, kwargs...)
 end
 
@@ -217,116 +222,55 @@ end
     return s2, s4
 end
 
-# TODO: Test apply_X! multithreaded
-"""
-    apply_X!(site, Xs...)
-
-Apply the “flip-bit at `site`” X-operator in-place
-to each vector in `Xs`.  All vectors must have the same length.
-"""
-@fastmath function apply_X!(site::Int, Xs::AbstractVector{T}...) where {T}
-    dim = length(Xs[1])
-    mask = 1 << site # No need to subtract 1, since `site` is 0-based
-    @inbounds for i = 1:dim
-        j = ((i-1) ⊻ mask) + 1
-        if j > i
-            for X in Xs
-                X[i], X[j] = X[j], X[i]
-            end
-        end
-    end
-    return nothing
-end
-
-"""
-    apply_X_mask!(mask::UInt, Xs::AbstractVector{T}...) where {T}
-
-Apply the multi-bit X-mask `mask` in-place to every vector in `Xs` (we assume that all have the same length).
-For each 1-based index `i`, compute the zero-based partner index `j = ((i-1) ⊻ mask) + 1`;
-whenever `i < j`, swap `a[i] ↔ a[j]` and `b[i] ↔ b[j]`.
-
-Returns the modified `(a, b)`.
-This is equivalent to performing all single‐bit flips whose bit‐positions are set in `mask` in one pass.
-"""
-@fastmath @inline function apply_X_mask!(mask::UInt, Xs::AbstractVector{T}...) where {T}
-    dim = length(Xs[1])
-    @inbounds for i = 1:dim
-        # compute zero-based index once
-        i0 = i - 1
-        j = (i0 ⊻ mask) + 1
-        if i < j
-            for X in Xs
-                X[i], X[j] = X[j], X[i]
-            end
-        end
-    end
-    return nothing
-end
-
-# TODO: add a comment or fix the description here
-# inVR[r] = Xloc1[r] * TMP1[r] + Xloc2[r] * TMP2[r] in an FMA (fused multiply-add) way
-# This is a SIMD-friendly version of the above operation.
-@inline @fastmath function blend_muladd!(
-    inVR::AbstractVector{T},
-    X1::AbstractVector{T},
-    T1::AbstractVector{T},
-    X2::AbstractVector{T},
-    T2::AbstractVector{T},
-) where {T<:AbstractFloat}
-    @inbounds @simd for i in eachindex(inVR, X1, T1, X2, T2)
-        # fuse one multiply+add into an FMA:
-        inVR[i] = muladd(X1[i], T1[i], X2[i] * T2[i])
-    end
-    return nothing
-end
-
-
 @fastmath @inline function kahan_accumulate(::Val{2}, inVR)::Tuple{Float64,Float64}
     p2_sum = 0.0
-    p2_c   = 0.0
+    p2_c = 0.0
     m2_sum = 0.0
-    m2_c   = 0.0
+    m2_c = 0.0
 
     @inbounds for v in inVR
         p = v * v
         # Kahan for p2SAM
-        y  = p - p2_c
-        t  = p2_sum + y
-        p2_c   = (t - p2_sum) - y
+        y = p - p2_c
+        t = p2_sum + y
+        p2_c = (t - p2_sum) - y
         p2_sum = t
 
         pp = p * p
         # Kahan for mSAM
-        y2  = pp - m2_c
-        t2  = m2_sum + y2
-        m2_c   = (t2 - m2_sum) - y2
+        y2 = pp - m2_c
+        t2 = m2_sum + y2
+        m2_c = (t2 - m2_sum) - y2
         m2_sum = t2
     end
 
     return (p2_sum, m2_sum)
 end
 
-@fastmath @inline function kahan_accumulate(::Val{q}, inVR)::Tuple{Float64,Float64} where {q}
+@fastmath @inline function kahan_accumulate(
+    ::Val{q},
+    inVR,
+)::Tuple{Float64,Float64} where {q}
     p2_sum = 0.0
-    p2_c   = 0.0  # compensation for p2_sum
+    p2_c = 0.0 # compensation for p2_sum
 
-    m_sum  = 0.0
-    m_c    = 0.0  # compensation for m_sum
+    m_sum = 0.0
+    m_c = 0.0 # compensation for m_sum
 
     @inbounds for v in inVR
-        p  = v * v        # v^2
-        pq = p^q          # p^q (q can be non-integer, see below)
+        p = v * v
+        pq = p^q
 
-        # --- accumulate p into p2_sum with compensation ---
-        y  = p - p2_c
-        t  = p2_sum + y
-        p2_c   = (t - p2_sum) - y
+        # accumulate p into p2_sum with compensation
+        y = p - p2_c
+        t = p2_sum + y
+        p2_c = (t - p2_sum) - y
         p2_sum = t
 
-        # --- accumulate pq into m_sum with compensation ---
+        # accumulate pq into m_sum with compensation
         y2 = pq - m_c
         t2 = m_sum + y2
-        m_c   = (t2 - m_sum) - y2
+        m_c = (t2 - m_sum) - y2
         m_sum = t2
     end
 
@@ -392,17 +336,17 @@ compute_chunk_sre(
 )
 
 function compute_chunk_sre(
-    ::Val{q},                        # exponent (Int or Real)
+    ::Val{q}, # exponent (Int or Real)
     istart::Int,
     iend::Int,
     ψ::StateVec{ComplexF64,2},
-    Zwhere::Vector{Int},             # your original `local_vector1`
-    XTAB::Vector{UInt64},            # your original `local_vector2` (bitmasks)
-    TMP1::Vector{Float64},           # shared, read-only
-    TMP2::Vector{Float64},           # shared, read-only
-    X1::Vector{Float64},             # shared, read-only
-    X2::Vector{Float64},             # shared, read-only
-    inVR::Vector{Float64},           # thread-local scratch, length == dim
+    Zwhere::Vector{Int},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64}, # shared, read-only
+    TMP2::Vector{Float64}, # shared, read-only
+    X1::Vector{Float64}, # shared, read-only
+    X2::Vector{Float64}, # shared, read-only
+    inVR::Vector{Float64}, # thread-local scratch, length == dim
     pbar::AbstractProgress,
     stride::Int,
 )::Tuple{Float64,Float64} where {q}
@@ -412,10 +356,10 @@ function compute_chunk_sre(
 
     # Outer Kahan accumulators
     p2SAM = 0.0
-    mSAM  = 0.0
+    mSAM = 0.0
 
     mask = UInt(0)
-    cnt  = 0
+    cnt = 0
 
     @inbounds for ix = istart:iend
         # cheap progress tick every `stride` (still commented out)
@@ -458,7 +402,7 @@ function compute_chunk_sre(
 
         # Accumulate p2 and mSAM
         p2SAM += local_p2
-        mSAM  += local_m
+        mSAM += local_m
     end
 
     finish!(pbar)
@@ -478,17 +422,17 @@ Key performance points:
 - For q=2 we use `p*p` (no `^`), and `dim = 1 << L` (cheap/int-exact).
 """
 function compute_chunk_sre(
-    ::Val{2},                        # exponent (Int or Real)
+    ::Val{2},
     istart::Int,
     iend::Int,
     ψ::StateVec{ComplexF64,2},
-    Zwhere::Vector{Int},             # your original `local_vector1`
-    XTAB::Vector{UInt64},            # your original `local_vector2` (bitmasks)
-    TMP1::Vector{Float64},           # shared, read-only
-    TMP2::Vector{Float64},           # shared, read-only
-    X1::Vector{Float64},             # shared, read-only
-    X2::Vector{Float64},             # shared, read-only
-    inVR::Vector{Float64},           # thread-local scratch, length == dim
+    Zwhere::Vector{Int},
+    XTAB::Vector{UInt64},
+    TMP1::Vector{Float64}, # shared, read-only
+    TMP2::Vector{Float64}, # shared, read-only
+    X1::Vector{Float64}, # shared, read-only
+    X2::Vector{Float64}, # shared, read-only
+    inVR::Vector{Float64}, # thread-local scratch
     pbar::AbstractProgress,
     stride::Int,
 )::Tuple{Float64,Float64}
@@ -498,11 +442,10 @@ function compute_chunk_sre(
 
     # Outer Kahan accumulators
     p2SAM = 0.0
-    mSAM  = 0.0
+    mSAM = 0.0
 
     mask = UInt(0)
-    cnt  = 0
-
+    cnt = 0
     @inbounds for ix = istart:iend
         # cheap progress tick every `stride` (still commented out)
         if stride > 0
@@ -544,7 +487,7 @@ function compute_chunk_sre(
 
         # Accumulate p2 and mSAM
         p2SAM += local_p2
-        mSAM  += local_m
+        mSAM += local_m
     end
 
     finish!(pbar)
@@ -587,8 +530,8 @@ new mask and write the blended values into `inVR`.
         j = i + stride
 
         # Map to original positions under the *new* mask
-        idx_i = (i - 1) ⊻ newmask + 1    # source for i
-        idx_j = (j - 1) ⊻ newmask + 1    # source for j
+        idx_i = (i - 1) ⊻ newmask + 1 # source for i
+        idx_j = (j - 1) ⊻ newmask + 1 # source for j
 
         inVR[i] = muladd(X1[i], TMP1[idx_i], X2[i] * TMP2[idx_i])
         inVR[j] = muladd(X1[j], TMP1[idx_j], X2[j] * TMP2[idx_j])
@@ -649,86 +592,13 @@ on the fly so that the loop is fully SIMD-vectorizable.
 end
 
 """
-    actX_qutrit!(ψ::AbstractVector{Complex{T}}, site::Integer) where T
-
-Apply the qutrit X‐gate on `site` (1‐based, least‐significant digit = 1) to the
-state‐vector `ψ` of length 3^n, in place.  This cycles each local triple
-
-  |…0ᵢ…⟩→|…1ᵢ…⟩→|…2ᵢ…⟩→|…0ᵢ…⟩
-
-on the chosen ternary digit, with no extra allocations.
-
-Throws an error if `length(ψ)` isn’t a power of 3 or `site` ∉ 1:n.
-"""
-@fastmath function actX_qutrit!(ψ::Vector{Complex{T}}, site::Integer) where {T}
-    N = length(ψ)
-    n = Int(round(log(N)/log(3)))
-    N != 3^n && error("length(ψ) = $N is not 3^n")
-    # site ∉ 1:n && error("site=$(site) out of 0:$(n-1)")
-
-    stride = 3^(site-1) # We subtract one since site is 1-based
-    block = 3*stride
-
-    @inbounds for block_start = 1:block:N
-        @simd for offset = 0:(stride-1)
-            a = block_start + offset
-            b = a + stride
-            c = b + stride
-
-            # Cycle the three states at positions a, b, c
-            tmp = ψ[a]
-            ψ[a] = ψ[b]
-            ψ[b] = ψ[c]
-            ψ[c] = tmp
-        end
-    end
-
-    return ψ
-end
-
-# Do the naive 4^N implementation of SRE2, which is not efficient but serves as a reference.
-function naive_SRE2(ψ::Vector{ComplexF64})
-    N = length(ψ)
-    # check that N is a power of two, set n = # qubits
-    n = Int(round(log2(N)))
-    2^n != N && error("length(ψ) = $N is not 2^n")
-
-    # define the single‐qubit Pauli matrices
-    σI = [1.0 0.0; 0.0 1.0]
-    σX = [0.0 1.0; 1.0 0.0]
-    σY = [0.0 -im; im 0.0]
-    σZ = [1.0 0.0; 0.0 -1.0]
-    Paulis = (σI, σX, σY, σZ)
-
-    acc = 0.0
-    # loop over all 4^n Pauli strings
-    Threads.@threads for idx = 0:(4^n-1)
-        # decode idx into base‐4 “digits” p[1],…,p[n] in {0,1,2,3}
-        tmp = idx
-        P = Paulis[(tmp%4)+1]
-        tmp ÷= 4
-        # build the full n‐qubit operator P = P₁ ⊗ P₂ ⊗ … ⊗ Pₙ
-        for _ = 2:n
-            P = kron(P, Paulis[(tmp%4)+1])
-            tmp ÷= 4
-        end
-        # expectation value ⟨ψ|P|ψ⟩ is real for Hermitian P (up to numerical noise)
-        exp_val = real(ψ' * (P * ψ))
-        acc += exp_val^4
-    end
-
-    # normalize by 2^n and take −log₂
-    return -log2(acc / N)
-end
-
-"""
     iphase(k::Int) -> ComplexF64
 
 Compute i^k for k mod 4 without allocations:
     k%4 == 0→1, 1→i, 2→-1, 3→-i.
 Used for the global phase i^{|x∧z|} from Y operators.
 """
-@inline function iphase(k::Int)
+@inline @fastmath function iphase(k::Int)::ComplexF64
     k2 = k & 0x3
     k2 == 0 && return 1.0 + 0im
     k2 == 1 && return 0.0 + 1im
@@ -740,7 +610,9 @@ end
 @inline function masktype(n::Int)
     n <= 32 && return UInt32
     n <= 64 && return UInt64
-    error("n=$n not supported by the bitmask method (needs >64-bit masks)... are you sure you want to compute this for that many qubits?")
+    error(
+        "n=$n not supported by the bitmask method (needs >64-bit masks)... are you sure you want to compute this for that many qubits?",
+    )
 end
 
 """
@@ -768,51 +640,71 @@ Therefore
 This function evaluates that sum in O(2^n) time and O(1) extra memory,
 without ever building the 2^n×2^n Pauli matrix.
 """
-@inline function expval_pauli_mask(ψ::Vector{ComplexF64}, x, z)::Float64
-    N  = length(ψ)                         # state size (N = 2^n)
-    ph = iphase(count_ones(x & z))         # i^{#Y} global phase (Y iff x&z has a 1)
-    s  = 0.0 + 0.0im                       # complex accumulator for the sum
+@inline function expval_pauli_mask(ψ::Vector{ComplexF64}, x::UInt32, z::UInt32)::Float64
+    N = length(ψ) # state size (N = 2^n)
+    ph = iphase(count_ones(x & z)) # i^{#Y} global phase (Y iff x&z has a 1)
+    s = 0.0 + 0.0im # complex accumulator for the sum
 
-    @inbounds @simd for b in 0:(N-1)       # loop over all basis indices b
-        bb   = UInt(b)                     # use UInt for cheap bit ops
-        bp   = bb ⊻ x                      # b' = b XOR x  (flip X/Y positions)
+    @inbounds @simd for b = 0:(N-1) # loop over all basis indices b
+        bb = UInt(b) # use UInt for cheap bit ops
+        bp = bb ⊻ x # b' = b XOR x  (flip X/Y positions)
+
         # (-1)^{b⋅z}: parity of bits where both b and z are 1
         sign = ifelse(isodd(count_ones(bb & z)), -1.0, 1.0)
         # accumulate conj(ψ[b']) * ψ[b] * (-1)^{b⋅z}
-        s   += conj(ψ[Int(bp)+1]) * ψ[b+1] * sign
+        s += conj(ψ[Int(bp)+1]) * ψ[b+1] * sign
     end
 
     # result is mathematically real; take real to drop roundoff imag parts
     return real(ph * s)
 end
 
-"""
-    naive_SRE(ψ, k)
+@inline function expval_pauli_mask(ψ::Vector{ComplexF64}, x::UInt64, z::UInt64)::Float64
+    N = length(ψ) # state size (N = 2^n)
+    ph = iphase(count_ones(x & z)) # i^{#Y} global phase (Y iff x&z has a 1)
+    s = 0.0 + 0.0im # complex accumulator for the sum
 
-Naive stabilizer-Rényi entropy of integer order `k` for an n-qubit pure state ψ.
-Matrix-free, thread-parallel. Works comfortably up to ~n=9–10 (beyond that it's
-just too slow because the sum is over 4^n Paulis).
+    @inbounds @simd for b = 0:(N-1) # loop over all basis indices b
+        bb = UInt64(b) # use UInt for cheap bit ops
+        bp = bb ⊻ x # b' = b XOR x  (flip X/Y positions)
+
+        # (-1)^{b⋅z}: parity of bits where both b and z are 1
+        sign = ifelse(isodd(count_ones(bb & z)), -1.0, 1.0)
+        # accumulate conj(ψ[b']) * ψ[b] * (-1)^{b⋅z}
+        s += conj(ψ[Int(bp)+1]) * ψ[b+1] * sign
+    end
+
+    # result is mathematically real; take real to drop roundoff imag parts
+    return real(ph * s)
+end
+
+naive_SRE(ψ::StateVec{ComplexF64,2}, q::Integer; progress = true) =
+    naive_SREnaive_SRE_kahan2(data(ψ), q; progress = progress)
+
 """
-function naive_SRE(ψ::AbstractVector{<:Complex}, k::Integer; progress = true)
+    naive_SRE(ψ, q)
+
+Naive stabilizer-Rényi entropy of integer order `q` for an n-qubit pure state ψ, it uses a
+ compensated summation algorithm for improved numerical stability.
+"""
+@fastmath function naive_SRE(ψ::Vector{<:Complex}, q::Integer; progress = true)
     N = length(ψ)
     @assert ispow2(N) "length(ψ) = $N is not 2^n"
     n = Int(trailing_zeros(UInt(N)))
-    T = masktype(n)  # x,z mask type (up to 64 qubits - like you would ever need that much...)
+    # T = masktype(n)  # x,z mask type (up to 64 qubits - like you would ever need that much...)
 
-    # normalize once; ensure concrete eltype
-    ψ64 = ComplexF64.(ψ)
-    ψ64 ./= sqrt(sum(abs2, ψ64))
+    @assert n <= 32 "n=$n too large for bitmask method (max 32 qubits supported)... Are you sure you want to compute this for that many qubits?"
 
-    total = Int(1) << (2*n)      # 4^n = 2^(2n); safe up to n=31 on 64-bit
+    total = Int(1) << (2*n) # 4^n
 
     pbar = progress ? HadaMAG.CounterProgress(total; hz = 8) : HadaMAG.NoProgress()
     progress_stride = progress ? max(div(total, 100), 1) : 0
     cnt = 0
 
     partial = zeros(Float64, Threads.nthreads())
-    Threads.@threads for idx in 0:(total-1)
+    c_val = zeros(Float64, Threads.nthreads()) # compensation for each thread
 
-        # cheap progress tick every `stride`
+    Threads.@threads for idx = 0:(total-1)
         if progress_stride > 0
             cnt += 1
             if (cnt % progress_stride) == 0
@@ -822,52 +714,36 @@ function naive_SRE(ψ::AbstractVector{<:Complex}, k::Integer; progress = true)
         end
 
         tid = Threads.threadid()
-        tmp = idx                # use Int to hold the base-4 digits; no 2n-bit limit
-        x = T(0); z = T(0)
+
+        # decode idx (0 ... 4^n-1) as an n-qubit Pauli string in base-4:
+        #  0 → I, 1 → X, 2 → Y, 3 → Z
+        tmp = UInt32(idx)
+        x = UInt32(0)
+        z = UInt32(0)
+
         @inbounds for j = 0:(n-1)
-            d = tmp & 0x3        # extract next base-4 digit
-            if d == 0x1          # X
-                x |= T(1) << j
-            elseif d == 0x2      # Y = XZ
-                x |= T(1) << j;  z |= T(1) << j
-            elseif d == 0x3      # Z
-                z |= T(1) << j
+            d = tmp & 0x3 # next base-4 digit
+            if d == 0x1 # X  → (x,z) = (1,0)
+                x |= UInt32(1) << j
+            elseif d == 0x2 # Y  → (x,z) = (1,1)
+                x |= UInt32(1) << j
+                z |= UInt32(1) << j
+            elseif d == 0x3 # Z  → (x,z) = (0,1)
+                z |= UInt32(1) << j
             end
-            tmp >>>= 2
+            tmp >>>= 2 # move to next digit
         end
-        e = expval_pauli_mask(ψ64, x, z)  # real (up to fp noise)
-        partial[tid] += (e*e)^k
+
+        # e = ⟨ψ|P_{x,z}|ψ⟩ for this Pauli string
+        e = expval_pauli_mask(ψ, x, z)
+
+        # Compensated summation of (e^2)^q into per-thread accumulator
+        y = (e*e)^q - c_val[tid]
+        t = partial[tid] + y
+        c_val[tid] = (t - partial[tid]) - y
+        partial[tid] = t
     end
 
     finish!(pbar)
-
     return -log2(sum(partial) / N)
-end
-
-@fastmath function actX_qutrit!(ψ::Vector{Complex{T}}, site::Integer, k::Integer) where {T}
-    N = length(ψ)
-    n = Int(round(log(N)/log(3)))
-    N != 3^n && error("length(ψ) = $N is not 3^n")
-    # site ∉ 1:n     && error("site=$site out of 1:$n")
-
-    stride = 3^(site-1)
-    block = 3*stride
-
-    @inbounds for bs = 1:block:N
-        @simd for off = 0:(stride-1)
-            i0 = bs + off
-            i1 = i0 + stride
-            i2 = i1 + stride
-
-            if k == 1
-                # forward cycle: 0→1→2→0
-                ψ[i0], ψ[i1], ψ[i2] = ψ[i1], ψ[i2], ψ[i0]
-            elseif k == 2
-                # backward cycle: 0→2→1→0 (≡ X²)
-                ψ[i0], ψ[i1], ψ[i2] = ψ[i2], ψ[i0], ψ[i1]
-            end
-        end
-    end
-
-    return ψ
 end

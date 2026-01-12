@@ -109,7 +109,9 @@ Generate a Haar-random state on `n` qubits of local dimension `2`, normalized to
 - `rng::AbstractRNG`: random number generator (default = `Random.GLOBAL_RNG`).
 """
 function rand_haar(n::Int; depth::Int, q::Int = 2, rng::AbstractRNG = Random.GLOBAL_RNG)
-    q in (2, 3) || throw(ArgumentError("rand_haar: only q=2 (qubits) and q=3 (qutrits) are implemented"))
+    q in (2, 3) || throw(
+        ArgumentError("rand_haar: only q=2 (qubits) and q=3 (qutrits) are implemented"),
+    )
 
     dim = q^n
     vec = zeros(ComplexF64, dim)
@@ -210,7 +212,7 @@ The circuit has `depth` layers; odd layers act on qubits (1,2),(3,4)…, even on
 
     for layer = 1:depth
         start = isodd(layer) ? 1 : 2
-        for s = start:2:(nqubits - 1)
+        for s = start:2:(nqubits-1)
             U = haar_random_unitary(q, 2, rng) # size (q^2 × q^2)
             apply_2gate!(state, T.(U), s, s + 1; q = q, work = work)
         end
@@ -218,8 +220,13 @@ The circuit has `depth` layers; odd layers act on qubits (1,2),(3,4)…, even on
     return state
 end
 
-apply_brick_wall_haar!(state, nqubits, depth; q::Int = 2, rng::AbstractRNG = Random.GLOBAL_RNG) =
-    apply_brick_wall_haar!(state, nqubits, depth, rng; q = q)
+apply_brick_wall_haar!(
+    state,
+    nqubits,
+    depth;
+    q::Int = 2,
+    rng::AbstractRNG = Random.GLOBAL_RNG,
+) = apply_brick_wall_haar!(state, nqubits, depth, rng; q = q)
 
 """
     apply_brick_wall_haar!(ψ::StateVec{T,q}, L::Int, depth::Int, rng::AbstractRNG = Random.GLOBAL_RNG)
@@ -278,12 +285,12 @@ function apply_2gate_qubit!(
 ) where {T}
 
     N = length(state)
-    mask1  = 1 << (s1 - 1)
-    mask2  = 1 << (s2 - 1)
+    mask1 = 1 << (s1 - 1)
+    mask2 = 1 << (s2 - 1)
     mask12 = mask1 | mask2
 
-    @inbounds for i = 0:(N - 1)
-        amp = state[i + 1]
+    @inbounds for i = 0:(N-1)
+        amp = state[i+1]
         b1 = (i & mask1) >>> (s1 - 1)
         b2 = (i & mask2) >>> (s2 - 1)
         idx_in = (b1 << 1) | b2
@@ -293,7 +300,7 @@ function apply_2gate_qubit!(
             j1 = (o >>> 1) & 1
             j2 = o & 1
             j = base | (j1 << (s1 - 1)) | (j2 << (s2 - 1))
-            tmp[j + 1] += gate[o + 1, idx_in + 1] * amp
+            tmp[j+1] += gate[o+1, idx_in+1] * amp
         end
     end
 
@@ -316,8 +323,8 @@ function apply_2gate_qudit!(
     p1 = q^(s1 - 1)
     p2 = q^(s2 - 1)
 
-    @inbounds for i = 0:(N - 1)
-        amp = state[i + 1]
+    @inbounds for i = 0:(N-1)
+        amp = state[i+1]
 
         d1 = (i ÷ p1) % q
         d2 = (i ÷ p2) % q
@@ -325,34 +332,17 @@ function apply_2gate_qudit!(
 
         base = i - d1 * p1 - d2 * p2
 
-        for o = 0:(q2 - 1)
+        for o = 0:(q2-1)
             o1 = o ÷ q
             o2 = o % q
             j = base + o1 * p1 + o2 * p2
-            tmp[j + 1] += gate[o + 1, idx_in + 1] * amp
+            tmp[j+1] += gate[o+1, idx_in+1] * amp
         end
     end
 
     state .= tmp
     return state
 end
-
-
-# """
-#     apply_2gate!(sv::StateVec{T,2}, gate::AbstractMatrix{T}, q1::Int, q2::Int)
-
-# Apply a two-qubit gate directly on a [`StateVec{T,2}`](@ref).
-# """
-# function apply_2gate!(
-#     sv::StateVec{T,q},
-#     gate::AbstractMatrix{Complex{T}},
-#     s1::Int,
-#     s2::Int;
-#     work::Union{Nothing,AbstractVector{Complex{T}}} = nothing,
-# ) where {T,q}
-#     apply_2gate!(sv.data, gate, s1, s2; q = q, work = work)
-#     return sv
-# end
 
 """
     apply_2gate!(sv::StateVec{T,2}, gate::AbstractMatrix{T}, q1::Int, q2::Int)
@@ -370,8 +360,12 @@ function apply_2gate!(
     return sv
 end
 
-apply_2gate(sv::StateVec{T,q}, gate::AbstractMatrix{T}, s1::Int, s2::Int) where {T<:Complex,q} =
-    apply_2gate!(copy(sv), gate, s1, s2)
+apply_2gate(
+    sv::StateVec{T,q},
+    gate::AbstractMatrix{T},
+    s1::Int,
+    s2::Int,
+) where {T<:Complex,q} = apply_2gate!(copy(sv), gate, s1, s2)
 
 """
     load_state(path::AbstractString; q::Int = 2) -> StateVec
