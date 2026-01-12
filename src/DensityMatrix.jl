@@ -3,7 +3,7 @@ using LinearAlgebra
 """# HadaMAG.jl: DensityMatrix
 A lightweight container for a mixed quantum state of `n` *q*-dits
 (`q` = qudit dimension, 2 for qubits) stored in the computational basis
-|0⋯00⟩, |0⋯01⟩, …, |q−1⋯(q−1)⟩.
+|0 ... 00⟩, |0 ... 01⟩, ..., |q−1 ... (q−1)⟩.
 """
 struct DensityMatrix{T,q}
     data::Matrix{T}
@@ -42,9 +42,9 @@ Base.getindex(ρ::DensityMatrix, i::Int, j::Int) = ρ.data[i,j]
 
 # Pretty-print summary in the REPL
 function Base.show(io::IO, ::MIME"text/plain", s::DensityMatrix)
-    # total bytes of the buffer (including any GC-allocated overhead)
+    # total bytes of the buffer
     bytes = Base.summarysize(s.data)
-    # human-friendly units (optional)
+    # user-friendly units
     function _fmt(n)
         for u in ("B", "KiB", "MiB", "GiB")
             if n < 1024
@@ -66,7 +66,7 @@ function Base.show(io::IO, ::MIME"text/plain", s::DensityMatrix)
         "(n=",
         s.n,
         ", dim=",
-        size(s.data,1),
+        length(s.data),
         ", mem=",
         memstr,
         ")",
@@ -80,17 +80,16 @@ Compute the reduced density matrix `ρA = Tr_B(|ψ⟩⟨ψ|)` for a contiguous b
 of an `N`-site qudit state (with local dimension `q`), where `dimA = q^NA` and `dimB = q^(N-NA)`.
 
 The keyword argument `side` selects which end of the chain is kept as subsystem `A`
-(assuming the usual convention in this codebase that site 1 is the least-significant digit
+(assuming the usual convention in this library that site 1 is the least-significant digit
 in the linear index, consistent with using `q^(s-1)` for site `s`):
 
-- `side = :left`  keeps sites `1:NA` (least-significant / fastest-varying block):
+- `side = :left`  keeps sites `1:NA` (least-significant):
   `ρA[iA,jA] = ∑_{kB=0}^{dimB-1} ψ[iA + dimA*kB] * conj(ψ[jA + dimA*kB])`.
 
-- `side = :right` keeps sites `(N-NA+1):N` (most-significant / slowest-varying block),
-  matching the C++ convention `i = iA*dimB + kB`:
+- `side = :right` keeps sites `(N-NA+1):N` (most-significant).
   `ρA[iA,jA] = ∑_{kB=0}^{dimB-1} ψ[iA*dimB + kB] * conj(ψ[jA*dimB + kB])`.
 
-Returns a `DensityMatrix(ρA; q=q)` of size `q^NA × q^NA`.
+Returns a `DensityMatrix(ρA; q)` of size `q^NA × q^NA`.
 """
 function reduced_density_matrix(
     ψ::StateVec{T,q},
@@ -108,17 +107,17 @@ function reduced_density_matrix(
     dimB = q^(N - NA)
 
     ρA = if side === :left
-        # A = least-significant block (sites 1..NA under your q^(s-1) indexing)
-        M = reshape(psi, dimA, dimB)      # A × B with entries ψ[iA,kB]
-        M * adjoint(M)                   # (A×B)(B×A) = A×A
+        # A = least-significant block (sites 1..NA)
+        M = reshape(psi, dimA, dimB) # A × B with entries ψ[iA,kB]
+        M * adjoint(M) # (A×B)(B×A) = A×A
     elseif side === :right
-        # A = most-significant block — matches C++ i = iA*dimB + kB
-        M = reshape(psi, dimB, dimA)      # B × A with entries ψ[iA,kB] at M[kB,iA]
-        S = adjoint(M) * M                # A×A, but corresponds to ρAᵀ
-        Matrix(transpose(S))              # IMPORTANT: transpose, NOT adjoint
+        # A = most-significant block (sites (N-NA+1)..N)
+        M = reshape(psi, dimB, dimA) # B × A with entries ψ[iA,kB] at M[kB,iA]
+        S = adjoint(M) * M # A×A, but corresponds to ρAᵀ
+        Matrix(transpose(S)) # transpose to get ρA
     else
         throw(ArgumentError("side must be :left or :right (got $side)"))
     end
 
-    return DensityMatrix(ρA; q = q)
+    return DensityMatrix(ρA; q)
 end
