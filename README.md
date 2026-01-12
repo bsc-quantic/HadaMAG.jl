@@ -23,7 +23,7 @@ julia> Pkg.add("https://github.com/bsc-quantic/HadaMAG.jl/")
 ```
 
 ## Stabilizer Rényi Entropy (SRE)
-The Stabilizer Rényi Entropy (SRE) of order $q$ is a measure of the non-stabilizer content of a pure quantum state $| ψ ⟩$.
+The Stabilizer Rényi Entropy (SRE) of order $q$ is a measure of the non-stabilizerness of a pure quantum state $| ψ ⟩$.
 `HadaMAG.jl` provides both exact and Monte Carlo methods to compute the SRE efficiently:
 ```julia
 julia> using HadaMAG
@@ -32,12 +32,12 @@ julia> using HadaMAG
 julia> ψ = rand_haar(16; depth=2)
 StateVec{ComplexF64,2}(n=16, dim=65536, mem=1.0 MiB)
 
-# Compute the 2nd-order Stabilizer Rényi Entropy
+# Compute the q=2 Stabilizer Rényi Entropy
 julia> (sre2, lost_norm) = SRE(ψ, 2)
 [==================================================] 100.0%  (65536/65536)
 (8.213760134602566, 3.9968028886505635e-15)
 
-# Estimate the 2nd-order SRE using Monte Carlo with 10000 samples
+# Estimate the q=2 SRE using Monte Carlo with 10000 samples
 julia> sre2_mc = MC_SRE(ψ, 2; Nsamples=10000)
 [==================================================] 100.0%  (10000/10000)
 8.218601276704227
