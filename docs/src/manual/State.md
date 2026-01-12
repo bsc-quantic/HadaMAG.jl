@@ -32,7 +32,7 @@ DensityMatrix{ComplexF64,2}(n=2, size=(4, 4), mem=304.0 B)
 ```
 
 ### Generating quantum circuit states
-`HadaMAG.jl` provides the `rand_haar` function to generate pure states obtained with quantum circuits from computational basis state, by applying Haar random 2-qudit gates in a brickwall pattern with an specified `depth`.
+`HadaMAG.jl` provides the `rand_haar` function to generate pure states obtained with quantum circuits from computational basis state by applying Haar random 2-qudit gates in a brickwall pattern with an specified `depth`.
 For example, let's generate a state on `N=4` qubits, corresponding to `depth=3` layers of random 2-qubit gates:
 
 ```julia
