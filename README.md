@@ -11,7 +11,7 @@ Key features:
 -  **Exact SRE** – Computes the SRE exactly, which applies a sequence of Fast Hadamard Transforms (FHT) to reduce the naive $O(8^N)$ cost down to $O(N 4^N)$ for $N$ qubits.
 - **Monte Carlo SRE** – Estimates the SRE using stochastic sampling.
 - **Mana for qutrits** – Numerically exact mana computation for statevectors of qutrit systems, reducing the naive $O(27^N)$ cost down to $O(N 9^N)$ for $N$ qutrits.
-- **Mana for mixed states of qutrits** – Numerically exact mana computation mana for mixed states of qutrits with complexity $O(N 9^N)$.
+- **Mana for mixed states of qutrits** – Numerically exact mana computation mana for mixed states of qutrits, with complexity $O(N 9^N)$.
 - **Multiple backends** – Choose between different execution backends (`:serial`, `:threads`, `:mpi_threads`, `:cuda`, `:mpi_cuda`) for optimal performance on your hardware.
 ---
 
