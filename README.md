@@ -1,11 +1,11 @@
 # HadaMAG.jl
 
-![Build Status](https://github.com/bsc-quantic/HadaMAG.jl/actions/workflows/CI.yml/badge.svg?branch=master)
+![Build Status](https://github.com/bsc-quantic/HadaMAG.jl/actions/workflows/CI.yml/badge.svg?branch=master)  [![arXiv](https://img.shields.io/badge/arXiv-2601.07824-b31b1b.svg)](https://arxiv.org/abs/2601.07824)
 
 > High-performance Stabilizer Rényi Entropy and Mana computations in Julia
 
 `HadaMAG.jl` is an optimized Julia library for computing the **Stabilizer Rényi Entropy (SRE)** and **Mana** of pure quantum states, and **Mana** of mixed quantum states.
-It is designed for both research and high‐performance computing environments, with support for **multi-threading**, **MPI**, **GPU acceleration** (using CUDA), and **multi-GPU** systems (using MPI + CUDA). 
+It is designed for both research and high‐performance computing environments, with support for **multi-threading**, **MPI**, **GPU acceleration** (using CUDA), and **multi-GPU** systems (using MPI + CUDA).
 
 Paper: [https://arxiv.org/abs/2601.07824](https://arxiv.org/abs/2601.07824)
 
