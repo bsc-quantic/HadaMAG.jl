@@ -15,7 +15,7 @@ Key features:
 - **Multiple backends** – Choose between different execution backends (`:serial`, `:threads`, `:mpi_threads`, `:cuda`, `:mpi_cuda`) for optimal performance on your hardware.
 ---
 
-`HadaMAG.jl` implements algorithms for non-stabilizerness evaluation introduced in manuscript [Computing quantum magic of state vectors
+`HadaMAG.jl` implements algorithms for non-stabilizerness evaluation introduced in [Computing quantum magic of state vectors
 ](https://arxiv.org/abs/2601.07824)
 
 
