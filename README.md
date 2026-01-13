@@ -23,7 +23,7 @@ Key features:
 To install `HadaMAG.jl`, use the Julia package manager:
 ```julia
 julia> using Pkg
-julia> Pkg.add("https://github.com/bsc-quantic/HadaMAG.jl/")
+julia> Pkg.add(url="https://github.com/bsc-quantic/HadaMAG.jl/")
 ```
 
 ## Stabilizer Rényi Entropy (SRE)

@@ -18,7 +18,7 @@
 ## Quickstart
 
 ```julia
-julia> using Pkg; Pkg.add("https://github.com/bsc-quantic/HadaMAG.jl/")
+julia> using Pkg; Pkg.add(url="https://github.com/bsc-quantic/HadaMAG.jl/")
 
 julia> using HadaMAG
 
