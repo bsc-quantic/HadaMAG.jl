@@ -5,7 +5,7 @@
 > High-performance Stabilizer Rényi Entropy and Mana computations in Julia
 
 `HadaMAG.jl` is an optimized Julia library for computing the **Stabilizer Rényi Entropy (SRE)** and **Mana** of pure quantum states, and **Mana** of mixed quantum states.
-It is designed for both research and high‐performance computing environments, with support for **multi-threading**, **MPI**, **GPU acceleration** (using CUDA), and **multi-GPU** systems (using MPI + CUDA).
+It is designed for both research and high‐performance computing environments, with support for **multi-threading**, **MPI**, **GPU acceleration** (using CUDA), and **multi-GPU** systems (using MPI + CUDA). Paper: [https://arxiv.org/abs/2601.07824](https://arxiv.org/abs/2601.07824)
 
 Key features:
 -  **Exact SRE** – Computes the SRE exactly, which applies a sequence of Fast Hadamard Transforms (FHT) to reduce the naive $O(8^N)$ cost down to $O(N 4^N)$ for $N$ qubits.
@@ -15,8 +15,6 @@ Key features:
 - **Multiple backends** – Choose between different execution backends (`:serial`, `:threads`, `:mpi_threads`, `:cuda`, `:mpi_cuda`) for optimal performance on your hardware.
 ---
 
-`HadaMAG.jl` implements algorithms for non-stabilizerness evaluation introduced in [Computing quantum magic of state vectors
-](https://arxiv.org/abs/2601.07824)
 
 
 ## Installation
