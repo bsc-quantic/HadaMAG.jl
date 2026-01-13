@@ -1,11 +1,15 @@
 # HadaMAG.jl Documentation
 
+[![arXiv](https://img.shields.io/badge/arXiv-2601.07824-b31b1b.svg)](https://arxiv.org/abs/2601.07824)
+
 **`HadaMAG.jl`** is an optimized Julia library for computing the Stabilizer Rényi Entropy (SRE) on pure quantum states. Most notably, it contains:
 
 - **Exact SRE**: Computes the SRE exactly, which applies a sequence of Fast Hadamard Transforms (FHT) to reduce the naive $O(8^N)$ cost down to $O(N 4^N)$ for $N$ qubits (see [Exact SRE](manual/ExactSRE)).
 - **Monte Carlo SRE**: Estimates the SRE using stochastic sampling (see [Monte Carlo SRE](manual/MCSRE)).
 - **Mana for qutrit systems**: Computes the exact mana of pure qutrit states, with complexity $O(N 9^N)$ (see [Mana Computation](manual/Mana)).
 - **Mana for mixed states of qutrits**: Computes the exact mana for mixed qutrit states represented as density matrices, with complexity $O(N 9^N)$ (see [Mana for Mixed States](manual/Mana/#Mana-for-mixed-states)).
+
+**Paper**: *Computing quantum magic of state vectors*, [arXiv:2601.07824](https://arxiv.org/abs/2601.07824).
 
 !!! warning "Performance tip"
     If you are dealing with significant number of qubits ($N > 16$), you can get **around 30 %** speed-up by compiling and linking your own optimized FFHT library.
