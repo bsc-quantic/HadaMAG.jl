@@ -84,8 +84,8 @@ julia> mana_mixed = Mana(ρA)
 - `:serial` – single-threaded CPU execution.
 - `:threads` – multi-threaded CPU execution.
 - `:mpi_threads` – MPI-based execution with multi-threading (requires `MPI.jl`).
-- `cuda` – GPU execution using CUDA (requires `CUDA.jl`).
-- `mpi_cuda` – hybrid MPI + GPU execution for multi-GPU systems (requires both `MPI.jl` and `CUDA.jl`).
+- `:cuda` – GPU execution using CUDA (requires `CUDA.jl`).
+- `:mpi_cuda` – hybrid MPI + GPU execution for multi-GPU systems (requires both `MPI.jl` and `CUDA.jl`).
 
 By default, `backend = :auto` selects the fastest available backend.
 For more details on configuring and using backends, see the [Backend Configuration guide](https://bsc-quantic.github.io/HadaMAG.jl/dev/manual/Backends/).
