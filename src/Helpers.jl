@@ -2,6 +2,8 @@ using Random
 using Distributions
 using DelimitedFiles
 using Statistics
+using Libdl
+using LoopVectorization
 
 # Compute whether `len` is an exact power of `q`, returning exponent and a flag.
 function _power_q(len::Integer, q::Integer)
@@ -38,54 +40,115 @@ end
     return r
 end
 
-# Two Ref containers to hold the function pointer and the default function
-const _fht_fn = Ref{Function}()
-const _default_fht_fn = Ref{Function}()
+# backend enum
+@enum FHTBackend BACKEND_JULIA BACKEND_JLL BACKEND_CUSTOM
 
-# Initialize the default function pointer to the JLL library function
-_default_fht_fn[] =
-    (vec, L) -> ccall(
+const _fht_fn      = Ref{Function}()
+const _fht_backend = Ref{FHTBackend}(BACKEND_JULIA)
+
+# pure Julia implementation (fallback)
+function _fht_julia!(x::Vector{Float64})
+    n = length(x)
+    h = 1
+    while h < n
+        for i in 0:2h:n-1
+            @turbo for j in i:i+h-1
+                a = x[j+1]
+                b = x[j+h+1]
+                x[j+1]   = a + b
+                x[j+h+1] = a - b
+            end
+        end
+        h <<= 1
+    end
+end
+
+_julia_fn(vec, L) = _fht_julia!(vec)
+
+# JLL implementation (x86 only, optional dependency)
+function _make_jll_fn()
+    @eval using FastHadamardStructuredTransforms_jll
+    # Eagerly access the library path — throws UndefVarError on ARM and other unsupported platforms
+    # while still inside the try/catch in _init_backend()
+    @eval FastHadamardStructuredTransforms_jll.libfasttransforms
+    return (vec, L) -> ccall(
         (:fht_double, FastHadamardStructuredTransforms_jll.libfasttransforms),
         Cvoid,
         (Ptr{Cdouble}, Cint),
-        pointer(vec),
-        L,
+        pointer(vec), L,
     )
+end
 
-_fht_fn[] = _default_fht_fn[]
+# auto-select best backend at load time
+function _init_backend()
+    try
+        _fht_fn[]      = _make_jll_fn()
+        _fht_backend[] = BACKEND_JLL
+        @info "FHT backend: FastHadamardStructuredTransforms_jll (x86)"
+    catch
+        _fht_fn[]      = _julia_fn
+        _fht_backend[] = BACKEND_JULIA
+        @info "FHT backend: pure Julia + LoopVectorization (fallback)"
+    end
+end
 
+_init_backend()
 
 """
     use_fht_lib(path::String)
-
-Point at your own compiled `.so` that exports exactly the symbol `:fht_double`.
-After calling this, every `call_fht!` will invoke your library instead of the JLL one.
+Use a custom `.so` that exports `:fht_double`. Overrides any other backend.
 """
 function use_fht_lib(path::String)
     handle = dlopen(path, Libdl.RTLD_LAZY | Libdl.RTLD_DEEPBIND)
-    ptr = dlsym(handle, :fht_double)
+    ptr    = dlsym(handle, :fht_double)
     @assert ptr != C_NULL "couldn't find symbol :fht_double in $path"
-    @info "Using custom FHT library at $path"
-    _fht_fn[] = (vec, L) -> ccall(ptr, Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L)
+    _fht_fn[]      = (vec, L) -> ccall(ptr, Cvoid, (Ptr{Cdouble}, Cint), pointer(vec), L)
+    _fht_backend[] = BACKEND_CUSTOM
+    @info "FHT backend: custom library at $path"
+    nothing
+end
+
+"""
+    use_jll_fht()
+Switch to the FastHadamardStructuredTransforms_jll backend (x86 only).
+Throws on unsupported platforms.
+"""
+function use_jll_fht()
+    _fht_fn[]      = _make_jll_fn()
+    _fht_backend[] = BACKEND_JLL
+    @info "FHT backend: FastHadamardStructuredTransforms_jll"
+    nothing
+end
+
+"""
+    use_julia_fht()
+Switch to the pure Julia + LoopVectorization backend (works on all platforms).
+"""
+function use_julia_fht()
+    _fht_fn[]      = _julia_fn
+    _fht_backend[] = BACKEND_JULIA
+    @info "FHT backend: pure Julia + LoopVectorization"
     nothing
 end
 
 """
     use_default_fht()
-
-Revert `call_fht!` back to the built-in `FastHadamardStructuredTransforms_jll` implementation.
+Revert to whichever backend was auto-selected at load time.
 """
 function use_default_fht()
-    @info "Reverting to default FHT library"
-    _fht_fn[] = _default_fht_fn[]
+    _init_backend()
     nothing
 end
 
 """
-    call_fht!(vec::Vector{Float64}, L::Int32)
+    fht_backend()
+Return the currently active FHT backend.
+"""
+fht_backend() = _fht_backend[]
 
-In‐place fast Hadamard transform.  After an optional call to `use_fht_lib`,
-this will call through your `.so` instead of the default JLL library.
+"""
+    call_fht!(vec::Vector{Float64}, L::Int32)
+In-place fast Hadamard transform using the currently active backend.
 """
 call_fht!(vec::Vector{Float64}, L::Int32) = (_fht_fn[])(vec, L)
 
