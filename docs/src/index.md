@@ -13,7 +13,8 @@
 
 !!! warning "Performance tip"
     If you are dealing with significant number of qubits ($N > 16$), you can get **around 30 %** speed-up by compiling and linking your own optimized FFHT library.
-    See the [Custom FHT Library](manual/CustomFHT) guide for how to build, enable and revert your own .so.
+    Also, if you are using an **ARM-based Apple Silicon** machine (or a platform that is not x86_64), the default JLL-provided library will not have optimized binaries, which will lead to significantly slower performance. In that case, you may specially want to consider compiling FFHT yourself for much better performance.
+    See the [Custom FHT Library](manual/CustomFHT) guide for how to build, enable and revert your own .so file.
 
 ## Quickstart
 
