@@ -1,5 +1,8 @@
 # Custom FHT Library
 
+!!! warning "Performance tip"
+    Currently, the default FHT library provided by `FastHadamardStructuredTransforms_jll` is only implemented for x86_64 architectures. If you are using a different platform (e.g., ARM-based Apple Silicon), the performance may be significantly slower due to the lack of optimized binaries, which falls back to a pure Julia implementation of the Fast Hadamard Transform. In such cases, we highly recommend compiling the FFHT library by yourself, which will have optimizations tailored to your architecture and can provide a substantial performance boost.
+
 Under the hood, `HadaMAG`’s Fast Hadamard Transform (FHT) is powered by the [`FastHadamardStructuredTransforms_jll`](https://github.com/JuliaPackaging/Yggdrasil/tree/master/F/FastHadamardStructuredTransforms) package (a Julia Binary Library artifact built via the [Yggdrasil](https://github.com/JuliaPackaging/Yggdrasil) infrastructure).  This gives you a portable, pre-built C library (the upstream [FFHT](https://github.com/FALCONN-LIB/FFHT) project) out of the box, with zero fuss on installation.
 
 However, it is important to note that these binaries prioritize **compatibility** over **peak performance**. Therefore, by compiling `FFHT` yourself with optimizations tuned to your CPU (for example passing `-march=native`, enabling link-time optimization, or targeting advanced SIMD extensions), you can often unlock around **10-30 %** faster transforms on large vectors. Since `HadaMAG`’s core routines rely heavily on FHT, those gains translate directly into substantial runtime savings.
